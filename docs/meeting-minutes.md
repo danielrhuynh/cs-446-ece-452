@@ -1,7 +1,7 @@
 # Meeting Minutes
 
-## Date
-This is an example instance of a meeting minute
-- Note 1
-- Note 2
-- [x] Task 1
+## Sunday Jan 25th @ 1PM
+Deciding on a project. Potential ideas include:
+- Online backgammon app (think chess.com but for backgammon)
+- Slot machine app
+- Polymarket clone
