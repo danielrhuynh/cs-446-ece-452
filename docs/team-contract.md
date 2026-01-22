@@ -3,7 +3,7 @@
 ## Roles
 
 - Leo is our team lead, and is responsible for coordinating the project
-- Dan will be the technical lead for X, responsible for X
+- Dan will be the technical lead for the project and will be responsible for acting as a tie-breaker if technical decisions come to a standstill, and ensuring that reasonable design decisions are made, and orchestrating component integration.
 - Ken will be the backend lead, responsible for database, API, and infrastructure
 - Josh will be X
 - Amin will be the X
@@ -26,3 +26,4 @@
 
 - Leo will post the agenda for the week in our group chat each Monday
 - David will take notes during all meetings
+
