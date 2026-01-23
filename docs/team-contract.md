@@ -5,9 +5,9 @@
 - Leo is our team lead, and is responsible for coordinating the project
 - Dan will be the technical lead for the project and will be responsible for acting as a tie-breaker if technical decisions come to a standstill, and ensuring that reasonable design decisions are made, and orchestrating component integration.
 - Ken will be the backend lead, responsible for database, API, and infrastructure
-- Josh will be X
-- Amin will be the X
-- David will be the design lead, responsible for designing the frontend of the project
+- Amin will be the frontend lead, responsible for user-facing component implementation
+- David will be the user design lead, responsible for designing the frontend of the project
+- Josh will be a support engineer helping the team across domains as required
 
 ## Communication
 
