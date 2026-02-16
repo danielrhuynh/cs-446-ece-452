@@ -1,0 +1,8 @@
+{
+  "name": "appgammon-monorepo",
+  "private": true,
+  "scripts": {
+    "mobile": "pnpm --filter mobile",
+    "server": "pnpm --filter server"
+  }
+}
