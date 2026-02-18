@@ -48,4 +48,4 @@ jobs:
               -e DB_PASSWORD=${{ secrets.PASSWORD }} \
               -e DB_NAME=${{ secrets.DBNAME }} \
               --restart unless-stopped \
-              ${{ secrets.ECR_REGISTRY }}/appgammon-server:latest
+              ${{ secrets.ECR_REGISTRY }}/appgammon-artifactory:latest

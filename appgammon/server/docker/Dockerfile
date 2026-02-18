@@ -1,4 +1,4 @@
-FROM node:25-slim AS base
+FROM --platform=linux/arm64 node:25-slim AS base
 RUN npm install -g pnpm
 
 WORKDIR /app
