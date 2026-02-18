@@ -1,5 +1,4 @@
 name: Deploy to EC2
-working-directory: ./appgammon
 on:
   # Modify later so I dont run credits
   push:
@@ -22,6 +21,7 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
       - name: Build and push image
+        working-directory: ./appgammon
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
