@@ -1,0 +1,5 @@
+{
+  "name": "@appgammon/common",
+  "main": "./index.ts",
+  "types": "./index.ts"
+}

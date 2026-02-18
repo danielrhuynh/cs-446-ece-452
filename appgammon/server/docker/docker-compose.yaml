@@ -1,0 +1,14 @@
+services:
+  postgres:
+    image: postgres:18
+    container_name: appgammon-db
+    environment:
+      POSTGRES_USER: appgammon
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: appgammon
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+volumes:
+  pgdata:
