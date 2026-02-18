@@ -8,6 +8,20 @@
       "when": 1771376649528,
       "tag": "0000_silent_thunderbolt",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1771442233443,
+      "tag": "0001_fair_patch",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1771443123876,
+      "tag": "0002_fearless_scourge",
+      "breakpoints": true
     }
   ]
 }

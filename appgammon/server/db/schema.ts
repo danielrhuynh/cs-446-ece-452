@@ -1,5 +1,6 @@
-import { pgTable, uuid, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, varchar } from "drizzle-orm/pg-core";
 import { session_status } from "@appgammon/common";
+import { generateId } from "../utils/id";
 
 export const players = pgTable("players", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -10,7 +11,7 @@ export const players = pgTable("players", {
 });
 
 export const sessions = pgTable("sessions", {
-  id: uuid("id").defaultRandom().primaryKey(),
+  id: varchar("id", { length: 6 }).primaryKey().$defaultFn(() => generateId()),
   status: text("status").notNull().default(session_status.open),
   player_1_id: uuid("player1_id")
     .references(() => players.id)

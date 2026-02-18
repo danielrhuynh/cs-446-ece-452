@@ -1,7 +1,7 @@
 import { session_status } from "@appgammon/common";
 import { db } from "../db/client";
 import { sessions, players } from "../db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, ne, isNull } from "drizzle-orm";
 import { logger } from "../utils/logger";
 
 export async function create_session(player_1_id: string) {
@@ -16,6 +16,32 @@ export async function create_session(player_1_id: string) {
   logger.info({ session }, "[SESSION] Creating new session");
 
   return session;
+}
+
+export async function join_session(player_2_id: string, session_id: string) {
+  const [session] = await db
+    .update(sessions)
+    .set({
+      player_2_id: player_2_id,
+      status: session_status.active
+    })
+    .where(
+      and(
+        eq(sessions.id, session_id),
+        isNull(sessions.player_2_id),
+        ne(sessions.player_1_id, player_2_id),
+        eq(sessions.status, session_status.open),
+      )
+    )
+    .returning();
+
+    if (!session) {
+      logger.info("[SESSION] Could not join session")
+    } else {
+      logger.info({ session }, "[SESSION] Joined session")
+    }
+
+    return session;
 }
 
 export async function get_or_create_player(device_id: string, name: string) {
