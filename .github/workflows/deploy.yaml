@@ -1,8 +1,6 @@
 name: Deploy to EC2
 on:
-  # Modify later so I dont run credits
-  push:
-    branches: [main]
+  workflow_dispatch:
 env:
   AWS_REGION: us-east-2
   ECR_REPOSITORY: appgammon-artifactory
