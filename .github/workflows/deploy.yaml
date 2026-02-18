@@ -37,15 +37,15 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             aws ecr get-login-password --region us-east-2 | docker login --username AWS --password-stdin ${{ secrets.ECR_REGISTRY }}
-            docker pull ${{ secrets.ECR_REGISTRY }}/appgammon:latest
-            docker stop appgammon || true
-            docker rm appgammon || true
+            docker pull ${{ secrets.ECR_REGISTRY }}/appgammon-server:latest
+            docker stop appgammon-server || true
+            docker rm appgammon-server || true
             docker run -d \
-              --name appgammon \
+              --name appgammon-server \
               -p 3000:3000 \
               -e DB_HOST=${{ secrets.RDSHOST }} \
               -e DB_USER=${{ secrets.USER }} \
               -e DB_PASSWORD=${{ secrets.PASSWORD }} \
               -e DB_NAME=${{ secrets.DBNAME }} \
               --restart unless-stopped \
-              ${{ secrets.ECR_REGISTRY }}/appgammon:latest
+              ${{ secrets.ECR_REGISTRY }}/appgammon-server:latest
