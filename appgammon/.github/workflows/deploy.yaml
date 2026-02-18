@@ -1,0 +1,50 @@
+name: Deploy to EC2
+on:
+  # Modify later so I dont run credits
+  push:
+    branches: [main]
+env:
+  AWS_REGION: us-east-2
+  ECR_REPOSITORY: appgammon
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Login to ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Build and push image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -f server/Dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${{ secrets.ECR_REGISTRY }}
+            docker pull ${{ secrets.ECR_REGISTRY }}/appgammon-server:latest
+            docker stop appgammon-server || true
+            docker rm appgammon-server || true
+            docker run -d \
+              --name appgammon-server \
+              -p 3000:3000 \
+              -e DB_HOST=${{ secrets.RDSHOST }} \
+              -e DB_USER=${{ secrets.USER }} \
+              -e DB_PASSWORD=${{ secrets.PASSWORD }} \
+              -e DB_NAME=${{ secrets.DBNAME }} \
+              --restart unless-stopped \
+              ${{ secrets.ECR_REGISTRY }}/appgammon-server:latest
