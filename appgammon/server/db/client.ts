@@ -6,11 +6,12 @@ import { config } from "dotenv";
 config({ path: "../.env" });
 
 const pool = new Pool({
-  host: process.env.DB_HOST || "localhost",
+  host: process.env.RDSHOST || "localhost",
   port: 5432,
-  user: process.env.DB_USER || "appgammon",
-  password: process.env.DB_PASSWORD || "password",
-  database: process.env.DB_NAME || "appgammon",
+  user: process.env.USER || "appgammon",
+  password: process.env.PASSWORD || "password",
+  database: process.env.DBNAME || "appgammon",
+  ssl: process.env.RDSHOST ? { rejectUnauthorized: false } : false,
 });
 
 export const db = drizzle(pool, { schema });
