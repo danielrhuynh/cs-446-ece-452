@@ -51,7 +51,9 @@ export default function CreateSessionScreen() {
         const newSession = await api.createSession(deviceId, displayName);
         setSession(newSession);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to create session");
+        setError(
+          err instanceof Error ? err.message : "Failed to create session",
+        );
       } finally {
         setIsCreating(false);
       }
@@ -99,11 +101,7 @@ export default function CreateSessionScreen() {
         // Note: expo-sharing works best with files
         // For text sharing, we'd typically use react-native-share
         // For now, we'll show an alert with the code
-        Alert.alert(
-          "Share Code",
-          message,
-          [{ text: "OK" }]
-        );
+        Alert.alert("Share Code", message, [{ text: "OK" }]);
       } else {
         Alert.alert("Share Code", message);
       }
@@ -126,7 +124,9 @@ export default function CreateSessionScreen() {
 
   if (deviceIdLoading || isCreating) {
     return (
-      <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+      <SafeAreaView
+        style={[styles.safeArea, { backgroundColor: colors.background }]}
+      >
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.loadingText, { color: colors.textMuted }]}>
@@ -139,7 +139,9 @@ export default function CreateSessionScreen() {
 
   if (error) {
     return (
-      <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+      <SafeAreaView
+        style={[styles.safeArea, { backgroundColor: colors.background }]}
+      >
         <View style={styles.loadingContainer}>
           <Text style={[styles.errorText, { color: "#EF4444" }]}>{error}</Text>
           <Button
@@ -154,7 +156,9 @@ export default function CreateSessionScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+    <SafeAreaView
+      style={[styles.safeArea, { backgroundColor: colors.background }]}
+    >
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.container}
@@ -183,7 +187,10 @@ export default function CreateSessionScreen() {
           <View
             style={[
               styles.settingCard,
-              { backgroundColor: colors.cardBackground, borderColor: colors.border },
+              {
+                backgroundColor: colors.cardBackground,
+                borderColor: colors.border,
+              },
             ]}
           >
             <Text style={[styles.settingLabel, { color: colors.text }]}>
@@ -206,7 +213,10 @@ export default function CreateSessionScreen() {
           <View
             style={[
               styles.settingCard,
-              { backgroundColor: colors.cardBackground, borderColor: colors.border },
+              {
+                backgroundColor: colors.cardBackground,
+                borderColor: colors.border,
+              },
             ]}
           >
             <Text style={[styles.settingLabel, { color: colors.text }]}>

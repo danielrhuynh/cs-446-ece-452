@@ -4,15 +4,12 @@
 
 import { Platform } from "react-native";
 
-// For development:
-// - Web/localhost uses localhost
-// - Mobile devices need your computer's local IP
-const DEV_API_URL = Platform.select({
-  web: "http://localhost:3000",
-  default: "http://10.0.0.206:3000", // Your local IP - update if it changes
-});
-
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || DEV_API_URL;
+const API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_URL ||
+  Platform.select({
+    web: "http://localhost:3000",
+    default: "http://10.0.0.206:3000",
+  });
 
 export interface PlayerInfo {
   id: string;
@@ -45,11 +42,11 @@ class ApiClient {
 
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
     console.log(`[API] ${options.method || "GET"} ${url}`);
-    
+
     const response = await fetch(url, {
       ...options,
       headers: {
@@ -86,7 +83,7 @@ class ApiClient {
   async joinSession(
     deviceId: string,
     displayName: string,
-    sessionId: string
+    sessionId: string,
   ): Promise<Session> {
     return this.request<Session>("/sessions/join", {
       method: "POST",
@@ -104,7 +101,7 @@ class ApiClient {
   async getSession(sessionId: string): Promise<SessionWithPlayers | null> {
     try {
       return await this.request<SessionWithPlayers>(
-        `/sessions/${sessionId.toUpperCase().replace(/-/g, "")}`
+        `/sessions/${sessionId.toUpperCase().replace(/-/g, "")}`,
       );
     } catch (error) {
       console.log("[API] getSession error:", error);

@@ -23,7 +23,7 @@ export async function join_session(player_2_id: string, session_id: string) {
     .update(sessions)
     .set({
       player_2_id: player_2_id,
-      status: session_status.active
+      status: session_status.closed,
     })
     .where(
       and(
@@ -31,17 +31,17 @@ export async function join_session(player_2_id: string, session_id: string) {
         isNull(sessions.player_2_id),
         ne(sessions.player_1_id, player_2_id),
         eq(sessions.status, session_status.open),
-      )
+      ),
     )
     .returning();
 
-    if (!session) {
-      logger.info("[SESSION] Could not join session")
-    } else {
-      logger.info({ session }, "[SESSION] Joined session")
-    }
+  if (!session) {
+    logger.info("[SESSION] Could not join session");
+  } else {
+    logger.info({ session }, "[SESSION] Joined session");
+  }
 
-    return session;
+  return session;
 }
 
 export async function get_session(session_id: string) {
@@ -72,7 +72,7 @@ export async function get_session(session_id: string) {
       .select({ name: players.name })
       .from(players)
       .where(eq(players.id, session.player_2_id));
-    
+
     if (player2Result.length > 0) {
       player_2_name = player2Result[0].name;
     }
@@ -88,10 +88,12 @@ export async function get_session(session_id: string) {
       id: session.player_1_id,
       name: session.player_1_name,
     },
-    player_2: session.player_2_id ? {
-      id: session.player_2_id,
-      name: player_2_name,
-    } : null,
+    player_2: session.player_2_id
+      ? {
+          id: session.player_2_id,
+          name: player_2_name,
+        }
+      : null,
   };
 }
 
