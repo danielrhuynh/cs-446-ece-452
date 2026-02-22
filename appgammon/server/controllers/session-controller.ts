@@ -29,7 +29,20 @@ sessionController.post("/join", async (c) => {
   const session = await sessionService.join_session(player.id, session_id);
 
   if (!session) {
-    return c.json({ error: "Failed to join session" });
+    return c.json({ error: "Failed to join session. It may not exist, be full, or already started." }, 400);
   }
+  return c.json(session);
+});
+
+// GET session by ID - returns session with player details
+sessionController.get("/:id", async (c) => {
+  const sessionId = c.req.param("id").toUpperCase();
+  
+  const session = await sessionService.get_session(sessionId);
+  
+  if (!session) {
+    return c.json({ error: "Session not found" }, 404);
+  }
+  
   return c.json(session);
 });

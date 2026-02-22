@@ -8,21 +8,62 @@ import { StatusBar } from "expo-status-bar";
 import "react-native-reanimated";
 
 import { useColorScheme } from "@/hooks/use-color-scheme";
-
-export const unstable_settings = {
-  anchor: "(tabs)",
-};
+import { Colors } from "@/constants/theme";
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
+  const colorScheme = useColorScheme() ?? "light";
+  const colors = Colors[colorScheme];
+
+  // Custom theme with purple header
+  const customTheme = {
+    ...(colorScheme === "dark" ? DarkTheme : DefaultTheme),
+    colors: {
+      ...(colorScheme === "dark" ? DarkTheme.colors : DefaultTheme.colors),
+      primary: colors.primary,
+      card: colors.header,
+    },
+  };
 
   return (
-    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+    <ThemeProvider value={customTheme}>
+      <Stack
+        screenOptions={{
+          headerStyle: {
+            backgroundColor: colors.header,
+          },
+          headerTintColor: "#fff",
+          headerTitleStyle: {
+            fontWeight: "600",
+          },
+        }}
+      >
         <Stack.Screen
-          name="modal"
-          options={{ presentation: "modal", title: "Modal" }}
+          name="index"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="create"
+          options={{
+            title: "Create Game",
+            headerBackTitle: "Back",
+          }}
+        />
+        <Stack.Screen
+          name="join"
+          options={{
+            title: "Join Game",
+            headerBackTitle: "Back",
+          }}
+        />
+        <Stack.Screen
+          name="lobby"
+          options={{
+            title: "",
+            headerLeft: () => null,
+            gestureEnabled: false,
+          }}
         />
       </Stack>
       <StatusBar style="auto" />
