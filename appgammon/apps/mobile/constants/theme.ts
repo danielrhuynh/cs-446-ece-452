@@ -1,66 +1,106 @@
 /**
  * Theme constants for Appgammon
- * Colors are based on the wireframe designs
+ * "Heritage Game Room" — warm greens & ambers inspired by backgammon boards
  */
 
 import { Platform } from "react-native";
 
 export const Colors = {
   light: {
-    text: "#11181C",
-    textMuted: "#687076",
-    background: "#fff",
-    tint: "#5BA4E8",
-    icon: "#687076",
-    // App-specific colors from wireframes
-    primary: "#5BA4E8", // Blue - Create Game button
-    secondary: "#6BCB77", // Green - Join Game button
-    accent: "#F9A826", // Orange/Yellow - accent color
-    border: "#E0E0E0",
-    inputBackground: "#F5F5F5",
-    cardBackground: "#FAFAFA",
+    text: "#1C1917",
+    textMuted: "#57534E",
+    background: "#FAF7F2",
+    icon: "#78716C",
+    // Primary: forest green (backgammon felt)
+    primary: "#2D6A4F",
+    primaryLight: "#40916C",
+    // Secondary: warm amber (wooden frame / pieces)
+    secondary: "#C4813D",
+    secondaryLight: "#D4A373",
+    // Accent & status
+    accent: "#E76F51",
+    error: "#C1121F",
+    onPrimary: "#FFFFFF",
+    border: "rgba(28,25,23,0.14)",
+    inputBackground: "rgba(255,255,255,0.75)",
+    cardBackground: "rgba(255,255,255,0.85)",
     // Status colors
-    hostBadge: "#6BCB77",
-    joinedBadge: "#F9A826",
-    // Header
-    header: "#B794F6", // Purple header from wireframes
+    hostBadge: "#2D6A4F",
+    joinedBadge: "#C4813D",
+    // Header & glass
+    header: "rgba(250,247,242,0.82)",
+    glassBorder: "rgba(255,252,245,0.55)",
+    glassBackground: "rgba(255,252,245,0.38)",
+    glassHighlight: "rgba(255,252,245,0.65)",
   },
   dark: {
-    text: "#ECEDEE",
-    textMuted: "#9BA1A6",
-    background: "#151718",
-    tint: "#5BA4E8",
-    icon: "#9BA1A6",
-    // App-specific colors
-    primary: "#5BA4E8",
-    secondary: "#6BCB77",
-    accent: "#F9A826",
-    border: "#333",
-    inputBackground: "#222",
-    cardBackground: "#1A1A1A",
+    text: "#FAF7F2",
+    textMuted: "#A8A29E",
+    background: "#1C1917",
+    icon: "#A8A29E",
+    // Primary: lighter green for dark mode
+    primary: "#52B788",
+    primaryLight: "#74C69D",
+    // Secondary: warm gold
+    secondary: "#E6B17E",
+    secondaryLight: "#F0C89E",
+    // Accent & status
+    accent: "#F4845F",
+    error: "#F87171",
+    onPrimary: "#FFFFFF",
+    border: "rgba(250,247,242,0.16)",
+    inputBackground: "rgba(40,36,32,0.60)",
+    cardBackground: "rgba(40,36,32,0.65)",
     // Status colors
-    hostBadge: "#6BCB77",
-    joinedBadge: "#F9A826",
-    // Header
-    header: "#8B5CF6",
+    hostBadge: "#52B788",
+    joinedBadge: "#E6B17E",
+    // Header & glass
+    header: "rgba(28,25,23,0.60)",
+    glassBorder: "rgba(200,190,175,0.22)",
+    glassBackground: "rgba(30,27,22,0.40)",
+    glassHighlight: "rgba(218,210,195,0.12)",
+  },
+};
+
+export const Gradients = {
+  light: {
+    background: ["#FAF7F2", "#F5F1EB", "#FBF8F4"] as const,
+  },
+  dark: {
+    background: ["#1C1917", "#211E1A", "#262220"] as const,
   },
 };
 
 export const Fonts = Platform.select({
   ios: {
-    sans: "system-ui",
+    display: "Outfit_700Bold",
+    displayMedium: "Outfit_600SemiBold",
+    sans: "Outfit_400Regular",
+    medium: "Outfit_500Medium",
+    semibold: "Outfit_600SemiBold",
+    bold: "Outfit_700Bold",
     serif: "ui-serif",
     rounded: "ui-rounded",
     mono: "ui-monospace",
   },
   default: {
-    sans: "normal",
+    display: "Outfit_700Bold",
+    displayMedium: "Outfit_600SemiBold",
+    sans: "Outfit_400Regular",
+    medium: "Outfit_500Medium",
+    semibold: "Outfit_600SemiBold",
+    bold: "Outfit_700Bold",
     serif: "serif",
     rounded: "normal",
     mono: "monospace",
   },
   web: {
-    sans: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+    display: "Outfit, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+    displayMedium: "Outfit, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+    sans: "Outfit, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+    medium: "Outfit, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+    semibold: "Outfit, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+    bold: "Outfit, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
     serif: "Georgia, 'Times New Roman', serif",
     rounded:
       "'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif",
@@ -83,4 +123,33 @@ export const BorderRadius = {
   lg: 16,
   xl: 24,
   full: 9999,
+};
+
+export const Layout = {
+  cardMaxWidth: 400,
+  contentMaxWidth: 420,
+};
+
+export const Shadows = {
+  sm: {
+    shadowColor: "#1C1917",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  md: {
+    shadowColor: "#1C1917",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.09,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  lg: {
+    shadowColor: "#1C1917",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.12,
+    shadowRadius: 18,
+    elevation: 8,
+  },
 };

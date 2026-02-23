@@ -28,6 +28,9 @@ db-generate:
 db-studio:
     pnpm --filter server run db:studio
 
+remote: db-up db-migrate
+    bash scripts/remote-dev.sh
+
 test:
     pnpm test
 

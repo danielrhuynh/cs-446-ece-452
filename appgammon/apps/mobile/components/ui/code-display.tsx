@@ -2,10 +2,12 @@
  * Session code display component
  */
 
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { Text, StyleSheet, TouchableOpacity } from "react-native";
 import * as Clipboard from "expo-clipboard";
-import { Colors, BorderRadius, Spacing } from "@/constants/theme";
+import { Colors, BorderRadius, Fonts, Spacing } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { LiquidGlass } from "@/components/ui/liquid-glass";
+import { formatSessionCode } from "@/lib/format";
 
 interface CodeDisplayProps {
   code: string;
@@ -15,31 +17,31 @@ export function CodeDisplay({ code }: CodeDisplayProps) {
   const colorScheme = useColorScheme() ?? "light";
   const colors = Colors[colorScheme];
 
-  // Format code with hyphen in middle (e.g., XK49-TZ)
-  const formattedCode =
-    code.length === 6
-      ? `${code.slice(0, 4)}-${code.slice(4)}`
-      : code;
+  const formattedCode = formatSessionCode(code);
 
   const handleCopy = async () => {
     await Clipboard.setStringAsync(code);
   };
 
   return (
-    <TouchableOpacity onPress={handleCopy} activeOpacity={0.7}>
-      <View
+    <TouchableOpacity
+      onPress={handleCopy}
+      activeOpacity={0.7}
+      accessibilityLabel={`Session code: ${formattedCode}. Tap to copy.`}
+      accessibilityRole="button"
+    >
+      <LiquidGlass
         style={[
           styles.container,
           {
             borderColor: colors.primary,
-            backgroundColor: colors.cardBackground,
           },
         ]}
       >
         <Text style={[styles.code, { color: colors.primary }]}>
           {formattedCode}
         </Text>
-      </View>
+      </LiquidGlass>
       <Text style={[styles.hint, { color: colors.textMuted }]}>
         Tap to copy
       </Text>
@@ -49,19 +51,20 @@ export function CodeDisplay({ code }: CodeDisplayProps) {
 
 const styles = StyleSheet.create({
   container: {
-    paddingVertical: Spacing.lg,
+    paddingVertical: Spacing.md,
     paddingHorizontal: Spacing.xl,
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderRadius: BorderRadius.lg,
     alignItems: "center",
   },
   code: {
     fontSize: 32,
-    fontWeight: "700",
-    letterSpacing: 4,
+    fontFamily: Fonts.display,
+    letterSpacing: 6,
   },
   hint: {
-    fontSize: 12,
+    fontSize: 14,
+    fontFamily: Fonts.medium,
     textAlign: "center",
     marginTop: Spacing.xs,
   },

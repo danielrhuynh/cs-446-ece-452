@@ -1,6 +1,6 @@
 /**
  * Create Session Screen
- * Wireframe 2: Session code, share button, game settings, waiting indicator
+ * Code beacon, share actions, game settings, waiting for opponent
  */
 
 import { useState, useEffect, useRef } from "react";
@@ -8,24 +8,69 @@ import {
   View,
   Text,
   StyleSheet,
-  ActivityIndicator,
   Alert,
-  SafeAreaView,
-  ScrollView,
+  Share,
+  TouchableOpacity,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import * as Sharing from "expo-sharing";
-import { Colors, Spacing, BorderRadius } from "@/constants/theme";
+import { Ionicons } from "@expo/vector-icons";
+import * as Linking from "expo-linking";
+import * as Clipboard from "expo-clipboard";
+import * as Haptics from "expo-haptics";
+import Animated, {
+  Easing,
+  FadeInDown,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
+import { Colors, Fonts, Spacing, BorderRadius, Layout, Shadows } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useDeviceId } from "@/hooks/use-device-id";
 import { useSessionEvents } from "@/hooks/use-session-events";
 import { createSession, cancelSession, type CreateSessionRes } from "@/lib/api";
 import { setAuthToken } from "@/lib/storage";
+import { formatSessionCode } from "@/lib/format";
 import { Button } from "@/components/ui/button";
-import { CodeDisplay } from "@/components/ui/code-display";
+import { LiquidGlass } from "@/components/ui/liquid-glass";
+import { ScreenContainer } from "@/components/ui/screen-container";
+import { LoadingCard } from "@/components/ui/loading-card";
+import { SegmentControl } from "@/components/ui/segment-control";
+import { QRCodeModal } from "@/components/ui/qr-code-modal";
 
 type BestOf = 3 | 5 | 7;
 
+/* ── Pulsing dot for the waiting indicator ── */
+function PulsingDot({ color, delay }: { color: string; delay: number }) {
+  const opacity = useSharedValue(0.25);
+
+  useEffect(() => {
+    opacity.value = withDelay(
+      delay,
+      withRepeat(
+        withSequence(
+          withTiming(1, { duration: 500, easing: Easing.inOut(Easing.ease) }),
+          withTiming(0.25, { duration: 500, easing: Easing.inOut(Easing.ease) }),
+        ),
+        -1,
+      ),
+    );
+  }, [delay, opacity]);
+
+  const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
+
+  return (
+    <Animated.View
+      style={[{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }, style]}
+    />
+  );
+}
+
+/* ── Main screen ── */
 export default function CreateSessionScreen() {
   const router = useRouter();
   const { displayName } = useLocalSearchParams<{ displayName: string }>();
@@ -36,49 +81,40 @@ export default function CreateSessionScreen() {
   const [session, setSession] = useState<CreateSessionRes | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
   const createRequestedRef = useRef(false);
 
-  // Game settings (UI only for now - not wired to backend)
   const [bestOf, setBestOf] = useState<BestOf>(3);
   const [gameClock, setGameClock] = useState(false);
+  const [qrVisible, setQrVisible] = useState(false);
 
-  // Create session on mount
+  /* ── Create session on mount ── */
   useEffect(() => {
     async function doCreateSession() {
       if (!deviceId || !displayName || createRequestedRef.current) return;
-
       createRequestedRef.current = true;
       setIsCreating(true);
       setError("");
-
       try {
         const newSession = await createSession(deviceId, displayName);
         await setAuthToken(newSession.auth_token);
         setSession(newSession);
       } catch (err) {
         createRequestedRef.current = false;
-        setError(
-          err instanceof Error ? err.message : "Failed to create session",
-        );
+        setError(err instanceof Error ? err.message : "Failed to create session");
       } finally {
         setIsCreating(false);
       }
     }
-
-    if (!deviceIdLoading && deviceId) {
-      doCreateSession();
-    }
+    if (!deviceIdLoading && deviceId) void doCreateSession();
   }, [deviceId, deviceIdLoading, displayName]);
 
-  // SSE: listen for opponent joining
-  const { session: sseSession, lastEvent: sseEvent } = useSessionEvents(
-    session?.id,
-  );
+  /* ── SSE: react to opponent join / cancellation ── */
+  const { session: sseSession, lastEvent: sseEvent } = useSessionEvents(session?.id);
   const navigatedRef = useRef(false);
 
   useEffect(() => {
     if (navigatedRef.current) return;
-
     const latestSession = sseSession ?? session;
 
     if (sseEvent === "session_cancelled" || latestSession?.status === "cancelled") {
@@ -97,246 +133,240 @@ export default function CreateSessionScreen() {
       navigatedRef.current = true;
       router.replace({
         pathname: "/lobby",
-        params: {
-          sessionId: latestSession.id,
-          displayName,
-          isHost: "true",
-        },
+        params: { sessionId: latestSession.id, displayName, isHost: "true" },
       });
     }
   }, [sseEvent, session, sseSession, displayName, router]);
 
+  /* ── Actions ── */
   const handleCancel = async () => {
-    if (!session) {
-      router.replace("/");
-      return;
-    }
-    try {
-      await cancelSession(session.id);
-    } catch {
-      // Best-effort cancel
-    }
-    router.replace("/");
+    navigatedRef.current = true;
+    if (!session) { router.back(); return; }
+    try { await cancelSession(session.id); } catch { /* best-effort */ }
+    router.back();
+  };
+
+  const getDeepLinkUrl = () =>
+    session ? Linking.createURL("/join", { queryParams: { sessionCode: session.id } }) : "";
+
+  const handleCopy = async () => {
+    if (!session) return;
+    await Clipboard.setStringAsync(session.id);
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   const handleShare = async () => {
     if (!session) return;
-
-    const message = `Join my Backgammon game! Use code: ${session.id}`;
-
+    const joinUrl = getDeepLinkUrl();
     try {
-      const isAvailable = await Sharing.isAvailableAsync();
-      if (isAvailable) {
-        // Note: expo-sharing works best with files
-        // For text sharing, we'd typically use react-native-share
-        // For now, we'll show an alert with the code
-        Alert.alert("Share Code", message, [{ text: "OK" }]);
-      } else {
-        Alert.alert("Share Code", message);
-      }
-    } catch {
-      Alert.alert("Share Code", message);
-    }
+      await Share.share({
+        title: "Join my Backgammon game",
+        message: `Join my Backgammon game: ${joinUrl}\nCode: ${session.id}`,
+        url: joinUrl,
+      });
+    } catch { Alert.alert("Unable to share", "Please try again."); }
   };
 
+  /* ── Loading / Error states ── */
   if (deviceIdLoading || isCreating) {
     return (
-      <SafeAreaView
-        style={[styles.safeArea, { backgroundColor: colors.background }]}
-      >
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.textMuted }]}>
-            Creating session...
-          </Text>
+      <ScreenContainer>
+        <View style={styles.centered}>
+          <LoadingCard message="Creating session..." />
         </View>
-      </SafeAreaView>
+      </ScreenContainer>
     );
   }
 
   if (error) {
     return (
-      <SafeAreaView
-        style={[styles.safeArea, { backgroundColor: colors.background }]}
-      >
-        <View style={styles.loadingContainer}>
-          <Text style={[styles.errorText, { color: "#EF4444" }]}>{error}</Text>
-          <Button
-            title="Try Again"
-            variant="primary"
-            onPress={() => router.back()}
-            style={{ marginTop: Spacing.md }}
-          />
+      <ScreenContainer>
+        <View style={styles.centered}>
+          <LiquidGlass style={[styles.errorCard, Shadows.md]}>
+            <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
+            <Button title="Try Again" variant="primary" onPress={() => router.back()}
+              style={{ marginTop: Spacing.md, width: "100%" }} />
+          </LiquidGlass>
         </View>
-      </SafeAreaView>
+      </ScreenContainer>
     );
   }
 
+  /* ── Main render ── */
   return (
-    <SafeAreaView
-      style={[styles.safeArea, { backgroundColor: colors.background }]}
-    >
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.container}
-      >
-        {/* Session Code Section */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            Your Session Code
-          </Text>
-          {session && <CodeDisplay code={session.id} />}
-          <Button
-            title="Share Code"
-            variant="primary"
-            onPress={handleShare}
-            style={{ marginTop: Spacing.md }}
-          />
-        </View>
+    <ScreenContainer>
+      <View style={styles.outer}>
+        <View style={styles.content}>
+          {/* ─── Code beacon ─── */}
+          <Animated.View entering={FadeInDown.duration(260)} style={styles.wrap}>
+            <LiquidGlass style={[styles.codeCard, Shadows.sm]}>
+              <Text style={[styles.inviteLabel, { color: colors.textMuted }]}>
+                Share this code with your opponent
+              </Text>
 
-        {/* Game Settings Section */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            Game Settings
-          </Text>
+              <TouchableOpacity
+                onPress={handleCopy}
+                activeOpacity={0.7}
+                accessibilityLabel={`Session code: ${session ? formatSessionCode(session.id) : "loading"}. Tap to copy`}
+                accessibilityRole="button"
+              >
+                <Text style={[styles.codeValue, { color: colors.primary }]}>
+                  {session ? formatSessionCode(session.id) : "------"}
+                </Text>
+              </TouchableOpacity>
 
-          {/* Best Of Selector */}
-          <View
-            style={[
-              styles.settingCard,
-              {
-                backgroundColor: colors.cardBackground,
-                borderColor: colors.border,
-              },
-            ]}
-          >
-            <Text style={[styles.settingLabel, { color: colors.text }]}>
-              Best of:
-            </Text>
-            <View style={styles.settingOptions}>
-              {([3, 5, 7] as BestOf[]).map((value) => (
-                <Button
-                  key={value}
-                  title={String(value)}
-                  variant={bestOf === value ? "primary" : "ghost"}
-                  size="sm"
-                  onPress={() => setBestOf(value)}
+              <Text
+                style={[
+                  styles.copyHint,
+                  { color: copied ? colors.primary : colors.textMuted },
+                ]}
+                accessibilityLiveRegion="polite"
+              >
+                {copied ? "Copied to clipboard" : "Tap code to copy"}
+              </Text>
+
+              <View style={[styles.thinDivider, { backgroundColor: colors.border }]} />
+
+              <View style={styles.shareRow}>
+                <TouchableOpacity
+                  style={[styles.pill, { borderColor: colors.border }]}
+                  onPress={handleShare}
+                  activeOpacity={0.7}
+                  accessibilityLabel="Share game invite"
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="share-outline" size={18} color={colors.primary} />
+                  <Text style={[styles.pillLabel, { color: colors.primary }]}>Share</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.pill, { borderColor: colors.border }]}
+                  onPress={() => setQrVisible(true)}
+                  activeOpacity={0.7}
+                  accessibilityLabel="Show QR code"
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="qr-code-outline" size={18} color={colors.primary} />
+                  <Text style={[styles.pillLabel, { color: colors.primary }]}>QR Code</Text>
+                </TouchableOpacity>
+              </View>
+            </LiquidGlass>
+          </Animated.View>
+
+          {/* ─── Settings ─── */}
+          <Animated.View entering={FadeInDown.delay(60).duration(260)} style={styles.wrap}>
+            <LiquidGlass style={[styles.settingsCard, Shadows.sm]}>
+              <View style={styles.settingRow}>
+                <Text style={[styles.settingLabel, { color: colors.text }]}>Best of</Text>
+                <SegmentControl<BestOf> options={[3, 5, 7]} value={bestOf} onChange={setBestOf} />
+              </View>
+              <View style={[styles.settingDivider, { backgroundColor: colors.border }]} />
+              <View style={styles.settingRow}>
+                <Text style={[styles.settingLabel, { color: colors.text }]}>Clock</Text>
+                <SegmentControl<boolean>
+                  options={[true, false]}
+                  value={gameClock}
+                  onChange={setGameClock}
+                  labelForOption={(v) => (v ? "ON" : "OFF")}
                 />
-              ))}
-            </View>
-          </View>
+              </View>
+            </LiquidGlass>
+          </Animated.View>
 
-          {/* Game Clock Selector */}
-          <View
-            style={[
-              styles.settingCard,
-              {
-                backgroundColor: colors.cardBackground,
-                borderColor: colors.border,
-              },
-            ]}
-          >
-            <Text style={[styles.settingLabel, { color: colors.text }]}>
-              Game Clock:
-            </Text>
-            <View style={styles.settingOptions}>
-              <Button
-                title="ON"
-                variant={gameClock ? "primary" : "ghost"}
-                size="sm"
-                onPress={() => setGameClock(true)}
-              />
-              <Button
-                title="OFF"
-                variant={!gameClock ? "primary" : "ghost"}
-                size="sm"
-                onPress={() => setGameClock(false)}
-              />
+          {/* ─── Waiting ─── */}
+          <Animated.View entering={FadeInDown.delay(120).duration(260)}>
+            <View style={styles.waitingContainer}>
+              <View style={styles.dotsRow}>
+                {[0, 1, 2].map((i) => (
+                  <PulsingDot key={i} color={colors.primary} delay={i * 200} />
+                ))}
+              </View>
+              <Text style={[styles.waitingText, { color: colors.textMuted }]}>
+                Waiting for opponent to join
+              </Text>
             </View>
-          </View>
+          </Animated.View>
         </View>
 
-        {/* Waiting Indicator */}
-        <View style={styles.waitingSection}>
-          <Text style={[styles.waitingText, { color: colors.textMuted }]}>
-            Waiting for opponent...
-          </Text>
-          <ActivityIndicator
-            size="small"
-            color={colors.primary}
-            style={{ marginTop: Spacing.sm }}
-          />
-        </View>
-
-        {/* Cancel Session */}
+        {/* ─── Cancel ─── */}
         <Button
-          title="Cancel"
-          variant="outline"
+          title="Cancel Session"
+          variant="ghost"
+          size="md"
           onPress={handleCancel}
-          style={{ marginTop: Spacing.xl }}
+          accessibilityLabel="Cancel session and go back"
+          style={styles.cancelBtn}
         />
-      </ScrollView>
-    </SafeAreaView>
+      </View>
+
+      {session && (
+        <QRCodeModal
+          visible={qrVisible}
+          onClose={() => setQrVisible(false)}
+          deepLinkUrl={getDeepLinkUrl()}
+          sessionCode={session.id}
+        />
+      )}
+    </ScreenContainer>
   );
 }
 
+/* ── Styles ── */
 const styles = StyleSheet.create({
-  safeArea: {
+  outer: {
     flex: 1,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  container: {
-    padding: Spacing.lg,
-    alignItems: "center",
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: Spacing.xl,
-  },
-  loadingText: {
-    marginTop: Spacing.md,
-    fontSize: 16,
-  },
-  errorText: {
-    fontSize: 16,
-    textAlign: "center",
-  },
-  section: {
-    width: "100%",
-    marginBottom: Spacing.xl,
-    alignItems: "center",
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "500",
-    marginBottom: Spacing.md,
-  },
-  settingCard: {
-    width: "100%",
-    flexDirection: "row",
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.lg,
     justifyContent: "space-between",
-    alignItems: "center",
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    marginBottom: Spacing.sm,
   },
-  settingLabel: {
-    fontSize: 14,
+  content: { gap: Spacing.md, alignItems: "center" },
+  wrap: { width: "100%", maxWidth: Layout.contentMaxWidth },
+  centered: { flex: 1, justifyContent: "center", alignItems: "center", padding: Spacing.xl },
+
+  /* Error */
+  errorCard: {
+    width: "100%", maxWidth: Layout.cardMaxWidth,
+    padding: Spacing.xl, alignItems: "center", borderRadius: BorderRadius.xl,
   },
-  settingOptions: {
-    flexDirection: "row",
-    gap: Spacing.xs,
+  errorText: { fontSize: 16, textAlign: "center", fontFamily: Fonts.medium },
+
+  /* Code beacon */
+  codeCard: {
+    paddingTop: Spacing.lg, paddingBottom: Spacing.md,
+    paddingHorizontal: Spacing.lg, borderRadius: BorderRadius.xl, alignItems: "center",
   },
-  waitingSection: {
-    alignItems: "center",
-    marginTop: Spacing.lg,
+  inviteLabel: {
+    fontSize: 14, fontFamily: Fonts.medium, marginBottom: Spacing.md, textAlign: "center",
   },
-  waitingText: {
-    fontSize: 14,
+  codeValue: { fontSize: 36, fontFamily: Fonts.display, letterSpacing: 4 },
+  copyHint: { fontSize: 14, fontFamily: Fonts.medium, marginTop: Spacing.sm },
+  thinDivider: { width: 40, height: StyleSheet.hairlineWidth, marginVertical: Spacing.md },
+  shareRow: { flexDirection: "row", gap: Spacing.sm },
+  pill: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingVertical: 10, paddingHorizontal: 16,
+    borderRadius: BorderRadius.full, borderWidth: 1,
+    minHeight: 44,
   },
+  pillLabel: { fontSize: 15, fontFamily: Fonts.semibold },
+
+  /* Settings */
+  settingsCard: { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md, borderRadius: BorderRadius.xl },
+  settingRow: {
+    flexDirection: "row", justifyContent: "space-between",
+    alignItems: "center", paddingVertical: Spacing.xs,
+  },
+  settingLabel: { fontSize: 16, fontFamily: Fonts.medium, flex: 1 },
+  settingDivider: { height: StyleSheet.hairlineWidth, marginVertical: Spacing.sm },
+
+  /* Waiting */
+  waitingContainer: { alignItems: "center", gap: Spacing.sm, paddingVertical: Spacing.md },
+  dotsRow: { flexDirection: "row", gap: 7, alignItems: "center" },
+  waitingText: { fontSize: 15, fontFamily: Fonts.medium },
+
+  /* Cancel */
+  cancelBtn: { alignSelf: "center" },
 });

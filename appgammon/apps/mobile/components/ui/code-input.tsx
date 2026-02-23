@@ -1,17 +1,13 @@
 /**
- * Session code input component with dashed boxes
+ * Session code input component with direct paste support
+ * Flex-based boxes so they scale on smaller screens
  */
 
-import { useState, useRef, useEffect } from "react";
-import {
-  View,
-  TextInput,
-  StyleSheet,
-  NativeSyntheticEvent,
-  TextInputKeyPressEventData,
-} from "react-native";
-import { Colors, BorderRadius, Spacing } from "@/constants/theme";
+import { useRef } from "react";
+import { Text, TextInput, Pressable, StyleSheet, View } from "react-native";
+import { Colors, BorderRadius, Fonts, Spacing } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { LiquidGlass } from "@/components/ui/liquid-glass";
 
 interface CodeInputProps {
   length?: number;
@@ -22,100 +18,117 @@ interface CodeInputProps {
 export function CodeInput({ length = 6, value, onChange }: CodeInputProps) {
   const colorScheme = useColorScheme() ?? "light";
   const colors = Colors[colorScheme];
-  const inputRefs = useRef<(TextInput | null)[]>([]);
-  const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
+  const inputRef = useRef<TextInput | null>(null);
 
-  // Split value into array of characters
   const codeArray = value.split("").concat(Array(length).fill("")).slice(0, length);
+  const half = Math.floor(length / 2);
 
-  useEffect(() => {
-    // Auto-focus first input on mount
-    inputRefs.current[0]?.focus();
-  }, []);
-
-  const handleChange = (text: string, index: number) => {
-    // Only accept alphanumeric characters
-    const sanitized = text.toUpperCase().replace(/[^A-Z0-9]/g, "");
-
-    if (sanitized.length === 0) return;
-
-    // Build new code
-    const newCodeArray = [...codeArray];
-    newCodeArray[index] = sanitized[0];
-    const newCode = newCodeArray.join("");
-    onChange(newCode);
-
-    // Move to next input
-    if (index < length - 1) {
-      inputRefs.current[index + 1]?.focus();
-    }
+  const handleChange = (text: string) => {
+    const sanitized = text.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, length);
+    onChange(sanitized);
   };
 
-  const handleKeyPress = (
-    e: NativeSyntheticEvent<TextInputKeyPressEventData>,
-    index: number
-  ) => {
-    if (e.nativeEvent.key === "Backspace") {
-      const newCodeArray = [...codeArray];
+  const renderBox = (char: string, index: number) => {
+    const isCurrent = index === value.length && value.length < length;
+    const isFilled = index < value.length;
 
-      if (codeArray[index]) {
-        // Clear current box
-        newCodeArray[index] = "";
-      } else if (index > 0) {
-        // Move to previous box and clear it
-        newCodeArray[index - 1] = "";
-        inputRefs.current[index - 1]?.focus();
-      }
-
-      onChange(newCodeArray.join(""));
-    }
+    return (
+      <LiquidGlass
+        key={index}
+        style={[
+          styles.boxContainer,
+          {
+            borderColor: isCurrent ? colors.primary : colors.border,
+            borderWidth: isCurrent ? 2 : 1,
+          },
+        ]}
+      >
+        <Text
+          style={[
+            styles.boxText,
+            {
+              color: colors.text,
+              opacity: isFilled ? 1 : 0.35,
+            },
+          ]}
+        >
+          {char || "\u2022"}
+        </Text>
+      </LiquidGlass>
+    );
   };
 
   return (
-    <View style={styles.container}>
-      {codeArray.map((char, index) => (
-        <TextInput
-          key={index}
-          ref={(ref) => {
-            inputRefs.current[index] = ref;
-          }}
-          style={[
-            styles.box,
-            {
-              borderColor:
-                focusedIndex === index ? colors.primary : colors.border,
-              backgroundColor: colors.inputBackground,
-              color: colors.text,
-            },
-          ]}
-          value={char}
-          onChangeText={(text) => handleChange(text, index)}
-          onKeyPress={(e) => handleKeyPress(e, index)}
-          onFocus={() => setFocusedIndex(index)}
-          onBlur={() => setFocusedIndex(null)}
-          maxLength={1}
-          autoCapitalize="characters"
-          autoCorrect={false}
-          textAlign="center"
-        />
-      ))}
-    </View>
+    <Pressable
+      style={styles.container}
+      onPress={() => inputRef.current?.focus()}
+      accessibilityLabel={`Session code input. ${value.length} of ${length} characters entered.`}
+      accessibilityRole="text"
+    >
+      <TextInput
+        ref={inputRef}
+        style={styles.hiddenInput}
+        value={value}
+        onChangeText={handleChange}
+        maxLength={length}
+        autoCapitalize="characters"
+        autoCorrect={false}
+        keyboardType="ascii-capable"
+        returnKeyType="done"
+        accessibilityLabel="Session code"
+      />
+
+      {/* First half */}
+      <View style={styles.group}>
+        {codeArray.slice(0, half).map((char, i) => renderBox(char, i))}
+      </View>
+
+      <Text style={[styles.separator, { color: colors.textMuted }]}>-</Text>
+
+      {/* Second half */}
+      <View style={styles.group}>
+        {codeArray.slice(half).map((char, i) => renderBox(char, i + half))}
+      </View>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flexDirection: "row",
-    gap: Spacing.sm,
+    alignItems: "center",
     justifyContent: "center",
+    position: "relative",
+    width: "100%",
+    gap: Spacing.sm,
   },
-  box: {
-    width: 44,
-    height: 52,
-    borderWidth: 2,
-    borderRadius: BorderRadius.sm,
-    borderStyle: "dashed",
-    fontSize: 20,
-    fontWeight: "700",
+  hiddenInput: {
+    position: "absolute",
+    width: "100%",
+    height: "100%",
+    opacity: 0,
+    zIndex: 2,
+  },
+  group: {
+    flex: 1,
+    flexDirection: "row",
+    gap: 6,
+  },
+  boxContainer: {
+    flex: 1,
+    aspectRatio: 0.82,
+    maxWidth: 52,
+    borderRadius: BorderRadius.md,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  separator: {
+    fontSize: 22,
+    fontFamily: Fonts.bold,
+  },
+  boxText: {
+    fontSize: 22,
+    fontFamily: Fonts.bold,
+    textAlign: "center",
   },
 });

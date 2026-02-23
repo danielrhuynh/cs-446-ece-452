@@ -1,6 +1,6 @@
 /**
- * Lobby / Waiting Room Screen
- * Wireframe 4: Player list, scoreboard, start game button (host only), leave button
+ * Lobby — Match-up screen
+ * Players face off, scoreboard between them, host starts the game.
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -10,19 +10,74 @@ import {
   StyleSheet,
   Alert,
   Platform,
-  SafeAreaView,
-  ScrollView,
-  TouchableOpacity,
   ActivityIndicator,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { Colors, Spacing, BorderRadius } from "@/constants/theme";
+import Animated, {
+  Easing,
+  FadeIn,
+  FadeInDown,
+  FadeInUp,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from "react-native-reanimated";
+import { Colors, Fonts, Spacing, BorderRadius, Layout, Shadows } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useSessionEvents } from "@/hooks/use-session-events";
 import { cancelSession, startGame } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { PlayerCard } from "@/components/ui/player-card";
+import { LiquidGlass } from "@/components/ui/liquid-glass";
+import { ScreenContainer } from "@/components/ui/screen-container";
+import { BackButton } from "@/components/ui/back-button";
+import { LoadingCard } from "@/components/ui/loading-card";
 
+/* ── Animated status dot: pulses amber while waiting, solid green when ready ── */
+function PulsingStatusDot({ color }: { color: string }) {
+  const pulse = useSharedValue(0);
+
+  useEffect(() => {
+    pulse.value = withRepeat(
+      withTiming(1, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
+      -1,
+      true,
+    );
+  }, [pulse]);
+
+  const style = useAnimatedStyle(() => ({
+    opacity: interpolate(pulse.value, [0, 1], [0.35, 1]),
+    transform: [{ scale: interpolate(pulse.value, [0, 1], [0.85, 1.15]) }],
+  }));
+
+  return <Animated.View style={[styles.statusDot, { backgroundColor: color }, style]} />;
+}
+
+/* ── Ghost avatar that breathes while waiting for opponent ── */
+function EmptyAvatar({ borderColor }: { borderColor: string }) {
+  const pulse = useSharedValue(0);
+
+  useEffect(() => {
+    pulse.value = withRepeat(
+      withTiming(1, { duration: 1800, easing: Easing.inOut(Easing.ease) }),
+      -1,
+      true,
+    );
+  }, [pulse]);
+
+  const style = useAnimatedStyle(() => ({
+    opacity: interpolate(pulse.value, [0, 1], [0.3, 0.7]),
+  }));
+
+  return (
+    <Animated.View style={[styles.avatar, styles.emptyAvatar, { borderColor }, style]}>
+      <Text style={[styles.avatarLetter, { color: borderColor }]}>?</Text>
+    </Animated.View>
+  );
+}
+
+/* ── Status labels ── */
 const STATUS_LABELS: Record<string, string> = {
   open: "Waiting for opponent",
   closed: "Ready to start",
@@ -30,15 +85,16 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled: "Session cancelled",
 };
 
+/* ── Main screen ── */
 export default function LobbyScreen() {
   const router = useRouter();
-  const { sessionId, isHost } = useLocalSearchParams<{
+  const { sessionId, isHost, displayName } = useLocalSearchParams<{
     sessionId: string;
     isHost: string;
+    displayName: string;
   }>();
   const colorScheme = useColorScheme() ?? "light";
   const colors = Colors[colorScheme];
-
   const isHostBool = isHost === "true";
 
   const { session, lastEvent } = useSessionEvents(sessionId);
@@ -46,58 +102,38 @@ export default function LobbyScreen() {
   const [score] = useState({ player1: 0, player2: 0 });
   const navigatedRef = useRef(false);
 
-  // Navigate to game screen when game starts, or home when cancelled
+  /* ── SSE navigation ── */
   useEffect(() => {
     if (navigatedRef.current) return;
-
-    const shouldExitSession =
-      lastEvent === "session_cancelled" || session?.status === "cancelled";
-    if (shouldExitSession) {
+    if (lastEvent === "session_cancelled" || session?.status === "cancelled") {
       navigatedRef.current = true;
       router.replace("/");
       return;
     }
-
-    const shouldEnterGame =
-      !!session &&
-      (lastEvent === "game_started" || session.status === "in_game");
-
-    if (shouldEnterGame) {
+    if (session && (lastEvent === "game_started" || session.status === "in_game")) {
       navigatedRef.current = true;
-      router.replace({
-        pathname: "/game",
-        params: { sessionId: session.id },
-      });
+      router.replace({ pathname: "/game", params: { sessionId: session.id } });
     }
   }, [lastEvent, session, router]);
 
+  /* ── Actions ── */
   const doLeave = useCallback(async () => {
+    // BUG FIX: Always cancel session when leaving, not just when in_game
     if (sessionId) {
-      try {
-        await cancelSession(sessionId);
-      } catch {
-        // Best-effort cancel
-      }
+      try { await cancelSession(sessionId); } catch { /* best-effort */ }
     }
     router.replace("/");
   }, [router, sessionId]);
 
   const handleLeave = useCallback(() => {
     if (Platform.OS === "web") {
-      if (window.confirm("Are you sure you want to leave this session?")) {
-        doLeave();
-      }
+      if (window.confirm("Are you sure you want to leave this session?")) void doLeave();
       return;
     }
-
-    Alert.alert(
-      "Leave Session",
-      "Are you sure you want to leave this session?",
-      [
-        { text: "Stay", style: "cancel" },
-        { text: "Leave", style: "destructive", onPress: doLeave },
-      ],
-    );
+    Alert.alert("Leave Session", "Are you sure you want to leave this session?", [
+      { text: "Stay", style: "cancel" },
+      { text: "Leave", style: "destructive", onPress: () => void doLeave() },
+    ]);
   }, [doLeave]);
 
   const handleStartGame = useCallback(async () => {
@@ -106,243 +142,243 @@ export default function LobbyScreen() {
       return;
     }
     setIsStarting(true);
-    try {
-      await startGame(sessionId);
-    } catch (err) {
-      Alert.alert(
-        "Error",
-        err instanceof Error ? err.message : "Failed to start game",
-      );
-    } finally {
-      setIsStarting(false);
-    }
+    try { await startGame(sessionId); }
+    catch (err) { Alert.alert("Error", err instanceof Error ? err.message : "Failed to start game"); }
+    finally { setIsStarting(false); }
   }, [session, sessionId]);
 
-  // Format session code with hyphen
-  const formattedCode = sessionId
-    ? `${sessionId.slice(0, 4)}-${sessionId.slice(4)}`
-    : "";
+  const opponentJoined = session?.player_2 != null;
+  const statusText = session ? (STATUS_LABELS[session.status] ?? session.status) : "";
 
-  // Determine if opponent has joined
-  const opponentJoined = session?.player_2 !== null && session?.player_2 !== undefined;
+  const youTag = (name: string | null | undefined) =>
+    name === displayName ? " (You)" : "";
 
-  // Loading state (no session data from SSE yet)
+  /* ── Loading ── */
   if (!session) {
     return (
-      <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
-        <View style={[styles.header, { backgroundColor: colors.header }]}>
-          <TouchableOpacity onPress={handleLeave} style={styles.leaveButton}>
-            <Text style={styles.leaveText}>Leave</Text>
-          </TouchableOpacity>
-          <View style={styles.headerSpacer} />
+      <ScreenContainer>
+        <View style={styles.headerWrap}>
+          <BackButton onPress={handleLeave} />
         </View>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.textMuted }]}>
-            Loading session...
-          </Text>
+        <View style={styles.centered}>
+          <LoadingCard message="Loading session..." />
         </View>
-      </SafeAreaView>
+      </ScreenContainer>
     );
   }
 
+  /* ── Main render ── */
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
-      {/* Header with Leave button */}
-      <View style={[styles.header, { backgroundColor: colors.header }]}>
-        <TouchableOpacity onPress={handleLeave} style={styles.leaveButton}>
-          <Text style={styles.leaveText}>Leave</Text>
-        </TouchableOpacity>
-        <View style={styles.headerSpacer} />
+    <ScreenContainer>
+      <View style={styles.headerWrap}>
+        <BackButton onPress={handleLeave} />
       </View>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.container}
-      >
-        {/* Session Code */}
-        <Text style={[styles.codeLabel, { color: colors.textMuted }]}>
-          Code: {formattedCode}
-        </Text>
-
-        {/* Session Status */}
-        <Text style={[styles.statusLabel, { color: colors.textMuted }]}>
-          {STATUS_LABELS[session.status] ?? session.status}
-        </Text>
-
-        {/* Players Section */}
-        <View style={styles.playersSection}>
-          {/* Player 1 (Host) */}
-          <PlayerCard
-            name={session.player_1?.name || "Host"}
-            isHost={true}
-            status="ready"
-          />
-
-          {/* Player 2 or Waiting */}
-          {session.player_2 ? (
-            <PlayerCard
-              name={session.player_2.name || "Player 2"}
-              isHost={false}
-              status="joined"
-            />
-          ) : (
-            <View
-              style={[
-                styles.waitingCard,
-                { borderColor: colors.border, backgroundColor: colors.cardBackground },
-              ]}
-            >
-              <Text style={[styles.waitingText, { color: colors.textMuted }]}>
-                Waiting for opponent...
-              </Text>
-              <ActivityIndicator
-                size="small"
-                color={colors.primary}
-                style={{ marginTop: Spacing.sm }}
+      <View style={styles.container}>
+        {/* Status */}
+        <Animated.View entering={FadeIn.duration(300)} style={styles.statusSection}>
+          <Text style={[styles.title, { color: colors.text }]}>Game Lobby</Text>
+          <View style={styles.statusRow}>
+            {opponentJoined ? (
+              <View
+                style={[styles.statusDot, { backgroundColor: colors.primary }]}
+                accessibilityLabel="Ready"
               />
+            ) : (
+              <PulsingStatusDot color={colors.accent} />
+            )}
+            <Text style={[styles.statusLabel, { color: colors.textMuted }]}>{statusText}</Text>
+          </View>
+        </Animated.View>
+
+        {/* ─── VS card ─── */}
+        <Animated.View entering={FadeInDown.duration(320)} style={styles.vsWrap}>
+          <LiquidGlass style={[styles.vsCard, Shadows.sm]}>
+            {/* Player 1 */}
+            <View style={styles.playerRow} accessibilityLabel={`Player 1: ${session.player_1?.name || "Host"}, Host, Ready`}>
+              <View style={[styles.avatar, { backgroundColor: colors.hostBadge }]}>
+                <Text style={styles.avatarLetter}>
+                  {(session.player_1?.name || "H")[0].toUpperCase()}
+                </Text>
+              </View>
+              <View style={styles.playerInfo}>
+                <Text style={[styles.playerName, { color: colors.text }]}>
+                  {session.player_1?.name || "Host"}
+                </Text>
+                <Text style={[styles.playerRole, { color: colors.textMuted }]}>
+                  Host{youTag(session.player_1?.name)}
+                </Text>
+              </View>
+              <View style={[styles.badge, { backgroundColor: colors.hostBadge }]}>
+                <Text style={styles.badgeText}>Ready</Text>
+              </View>
             </View>
+
+            {/* Divider */}
+            <View style={styles.vsDivider}>
+              <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+              <View style={[styles.vsCircle, { borderColor: colors.border }]}>
+                <Text style={[styles.vsLabel, { color: colors.textMuted }]}>VS</Text>
+              </View>
+              <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+            </View>
+
+            {/* Player 2 or waiting */}
+            {session.player_2 ? (
+              <Animated.View
+                entering={FadeInUp.duration(400)}
+                style={styles.playerRow}
+                accessibilityLabel={`Player 2: ${session.player_2.name || "Player 2"}, Challenger, Joined`}
+              >
+                <View style={[styles.avatar, { backgroundColor: colors.joinedBadge }]}>
+                  <Text style={styles.avatarLetter}>
+                    {(session.player_2.name || "P")[0].toUpperCase()}
+                  </Text>
+                </View>
+                <View style={styles.playerInfo}>
+                  <Text style={[styles.playerName, { color: colors.text }]}>
+                    {session.player_2.name || "Player 2"}
+                  </Text>
+                  <Text style={[styles.playerRole, { color: colors.textMuted }]}>
+                    Challenger{youTag(session.player_2.name)}
+                  </Text>
+                </View>
+                <View style={[styles.badge, { backgroundColor: colors.joinedBadge }]}>
+                  <Text style={styles.badgeText}>Joined</Text>
+                </View>
+              </Animated.View>
+            ) : (
+              <View style={styles.playerRow} accessibilityLabel="Waiting for opponent to join">
+                <EmptyAvatar borderColor={colors.border} />
+                <View style={styles.playerInfo}>
+                  <Text style={[styles.waitingForLabel, { color: colors.textMuted }]}>
+                    Waiting for opponent...
+                  </Text>
+                  <ActivityIndicator
+                    size="small"
+                    color={colors.primary}
+                    style={{ marginTop: Spacing.xs, alignSelf: "flex-start" }}
+                  />
+                </View>
+              </View>
+            )}
+          </LiquidGlass>
+        </Animated.View>
+
+        {/* ─── Scoreboard ─── */}
+        <Animated.View entering={FadeInDown.delay(80).duration(300)} style={styles.scoreWrap}>
+          <LiquidGlass style={[styles.scoreCard, Shadows.sm]}>
+            <Text style={[styles.scoreHeader, { color: colors.textMuted }]}>SCOREBOARD</Text>
+            <View style={styles.scoreRow}>
+              <Text style={[styles.scoreName, { color: colors.text }]} numberOfLines={1}>
+                {session.player_1?.name || "Host"}
+              </Text>
+              <View style={styles.scoreCenter}>
+                <Text style={[styles.scoreNum, { color: colors.text }]}>{score.player1}</Text>
+                <Text style={[styles.scoreSep, { color: colors.border }]}>:</Text>
+                <Text style={[styles.scoreNum, { color: colors.text }]}>{score.player2}</Text>
+              </View>
+              <Text
+                style={[styles.scoreName, { color: colors.text, textAlign: "right" }]}
+                numberOfLines={1}
+              >
+                {session.player_2?.name || "---"}
+              </Text>
+            </View>
+          </LiquidGlass>
+        </Animated.View>
+
+        {/* Spacer */}
+        <View style={{ flex: 1 }} />
+
+        {/* ─── Action ─── */}
+        <Animated.View entering={FadeInDown.delay(160).duration(300)} style={styles.actionWrap}>
+          {isHostBool ? (
+            <>
+              <Button
+                title={isStarting ? "Starting..." : "Start Game"}
+                variant={opponentJoined ? "primary" : "outline"}
+                size="lg"
+                fullWidth
+                disabled={!opponentJoined || isStarting}
+                onPress={() => void handleStartGame()}
+                accessibilityLabel={opponentJoined ? "Start the game" : "Start game (waiting for opponent)"}
+                accessibilityState={{ disabled: !opponentJoined || isStarting }}
+              />
+              {!opponentJoined && (
+                <Text style={[styles.hintText, { color: colors.textMuted }]}>
+                  An opponent must join before you can start
+                </Text>
+              )}
+            </>
+          ) : (
+            <LiquidGlass style={styles.waitHostCard}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={[styles.waitHostText, { color: colors.textMuted }]}>
+                Waiting for host to start the game...
+              </Text>
+            </LiquidGlass>
           )}
-        </View>
-
-        {/* Scoreboard */}
-        <View style={styles.scoreSection}>
-          <Text style={[styles.scoreLabel, { color: colors.text }]}>
-            Scoreboard: {score.player1} - {score.player2}
-          </Text>
-        </View>
-
-        {/* Action Buttons */}
-        <View style={styles.actionSection}>
-          {isHostBool && (
-            <Button
-              title={isStarting ? "Starting..." : "Start Game"}
-              variant="primary"
-              size="lg"
-              fullWidth
-              disabled={!opponentJoined || isStarting}
-              onPress={handleStartGame}
-            />
-          )}
-
-          {isHostBool && (
-            <Text style={[styles.hostOnlyText, { color: colors.textMuted }]}>
-              (Host only)
-            </Text>
-          )}
-
-          {!isHostBool && !opponentJoined && (
-            <Text style={[styles.waitingHostText, { color: colors.textMuted }]}>
-              Waiting for host to start the game...
-            </Text>
-          )}
-
-          {!isHostBool && opponentJoined && (
-            <Text style={[styles.waitingHostText, { color: colors.textMuted }]}>
-              Waiting for host to start the game...
-            </Text>
-          )}
-
-          <Button
-            title="Rematch (post-game)"
-            variant="ghost"
-            size="md"
-            fullWidth
-            disabled
-            onPress={() => {}}
-            style={styles.rematchButton}
-          />
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+        </Animated.View>
+      </View>
+    </ScreenContainer>
   );
 }
 
+/* ── Styles ── */
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
+  headerWrap: { paddingHorizontal: Spacing.md, paddingTop: Spacing.xs, alignItems: "flex-start" },
+  container: { flex: 1, paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm, paddingBottom: Spacing.lg },
+  centered: { flex: 1, justifyContent: "center", alignItems: "center", padding: Spacing.xl },
+
+  /* Status */
+  statusSection: { alignItems: "center", marginBottom: Spacing.md },
+  title: { fontSize: 26, fontFamily: Fonts.display, marginBottom: Spacing.xs },
+  statusRow: { flexDirection: "row", alignItems: "center", gap: Spacing.sm },
+  statusDot: { width: 10, height: 10, borderRadius: 5 },
+  statusLabel: { fontSize: 15, fontFamily: Fonts.medium },
+
+  /* VS card */
+  vsWrap: { width: "100%", maxWidth: Layout.contentMaxWidth, alignSelf: "center", marginBottom: Spacing.md },
+  vsCard: { padding: Spacing.lg, borderRadius: BorderRadius.xl },
+  playerRow: { flexDirection: "row", alignItems: "center", gap: Spacing.md },
+  avatar: { width: 50, height: 50, borderRadius: 25, justifyContent: "center", alignItems: "center" },
+  emptyAvatar: { backgroundColor: "transparent", borderWidth: 2, borderStyle: "dashed" },
+  avatarLetter: { fontSize: 20, fontFamily: Fonts.bold, color: "#FFFFFF" },
+  playerInfo: { flex: 1 },
+  playerName: { fontSize: 17, fontFamily: Fonts.semibold },
+  playerRole: { fontSize: 14, fontFamily: Fonts.medium, marginTop: 2 },
+  badge: { borderRadius: BorderRadius.full, paddingHorizontal: 12, paddingVertical: 5 },
+  badgeText: { fontSize: 13, fontFamily: Fonts.semibold, color: "#FFFFFF" },
+  waitingForLabel: { fontSize: 15, fontFamily: Fonts.medium },
+
+  vsDivider: { flexDirection: "row", alignItems: "center", marginVertical: Spacing.md },
+  dividerLine: { flex: 1, height: StyleSheet.hairlineWidth },
+  vsCircle: {
+    width: 34, height: 34, borderRadius: 17, borderWidth: 1,
+    justifyContent: "center", alignItems: "center", marginHorizontal: Spacing.sm,
   },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+  vsLabel: { fontSize: 12, fontFamily: Fonts.bold },
+
+  /* Scoreboard */
+  scoreWrap: { width: "100%", maxWidth: Layout.contentMaxWidth, alignSelf: "center" },
+  scoreCard: { padding: Spacing.md, borderRadius: BorderRadius.lg },
+  scoreHeader: {
+    fontSize: 12, fontFamily: Fonts.semibold, letterSpacing: 1,
+    textAlign: "center", marginBottom: Spacing.sm,
   },
-  leaveButton: {
-    paddingVertical: Spacing.xs,
-    paddingHorizontal: Spacing.sm,
+  scoreRow: { flexDirection: "row", alignItems: "center" },
+  scoreName: { flex: 1, fontSize: 15, fontFamily: Fonts.medium },
+  scoreCenter: { flexDirection: "row", alignItems: "center", gap: 6 },
+  scoreNum: { fontSize: 26, fontFamily: Fonts.display, minWidth: 24, textAlign: "center" },
+  scoreSep: { fontSize: 22, fontFamily: Fonts.bold },
+
+  /* Action */
+  actionWrap: { width: "100%", maxWidth: Layout.contentMaxWidth, alignItems: "center", alignSelf: "center" },
+  hintText: { fontSize: 14, fontFamily: Fonts.medium, textAlign: "center", marginTop: Spacing.sm },
+  waitHostCard: {
+    width: "100%", flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: Spacing.sm, paddingVertical: Spacing.md, paddingHorizontal: Spacing.lg, borderRadius: BorderRadius.lg,
   },
-  leaveText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "500",
-  },
-  headerSpacer: {
-    flex: 1,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  container: {
-    padding: Spacing.lg,
-    alignItems: "center",
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: Spacing.xl,
-  },
-  loadingText: {
-    marginTop: Spacing.md,
-    fontSize: 16,
-  },
-  codeLabel: {
-    fontSize: 14,
-    marginBottom: Spacing.xs,
-  },
-  statusLabel: {
-    fontSize: 12,
-    marginBottom: Spacing.lg,
-  },
-  playersSection: {
-    width: "100%",
-    gap: Spacing.md,
-    marginBottom: Spacing.xl,
-  },
-  waitingCard: {
-    padding: Spacing.lg,
-    borderRadius: BorderRadius.md,
-    borderWidth: 2,
-    borderStyle: "dashed",
-    alignItems: "center",
-  },
-  waitingText: {
-    fontSize: 14,
-  },
-  scoreSection: {
-    marginBottom: Spacing.xl,
-  },
-  scoreLabel: {
-    fontSize: 18,
-    fontWeight: "600",
-  },
-  actionSection: {
-    width: "100%",
-    maxWidth: 300,
-    alignItems: "center",
-    gap: Spacing.xs,
-  },
-  hostOnlyText: {
-    fontSize: 12,
-    marginTop: Spacing.xs,
-  },
-  waitingHostText: {
-    fontSize: 14,
-    textAlign: "center",
-    marginBottom: Spacing.md,
-  },
-  rematchButton: {
-    marginTop: Spacing.lg,
-  },
+  waitHostText: { fontSize: 15, fontFamily: Fonts.medium },
 });
