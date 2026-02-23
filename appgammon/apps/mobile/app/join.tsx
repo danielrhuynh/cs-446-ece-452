@@ -17,7 +17,8 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { Colors, Spacing } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useDeviceId } from "@/hooks/use-device-id";
-import { api } from "@/lib/api";
+import { joinSession } from "@/lib/api";
+import { setAuthToken } from "@/lib/storage";
 import { Button } from "@/components/ui/button";
 import { CodeInput } from "@/components/ui/code-input";
 
@@ -47,7 +48,8 @@ export default function JoinSessionScreen() {
     setError("");
 
     try {
-      const session = await api.joinSession(deviceId, displayName, sessionCode);
+      const session = await joinSession(deviceId, displayName, sessionCode);
+      await setAuthToken(session.auth_token);
       
       // Successfully joined! Navigate to lobby
       router.replace({

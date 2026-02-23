@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "tsx watch index.ts",
     "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "start": "tsx index.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
@@ -13,6 +15,7 @@
   "dependencies": {
     "@appgammon/common": "workspace:*",
     "@hono/node-server": "^1.19.9",
+    "@hono/standard-validator": "^0.2.2",
     "dotenv": "^17.3.1",
     "drizzle-kit": "^0.31.9",
     "drizzle-orm": "^0.45.1",
@@ -25,6 +28,7 @@
   "devDependencies": {
     "@types/pg": "^8.15.0",
     "tsx": "^4.19.0",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.2",
+    "vitest": "^3.2.4"
   }
 }

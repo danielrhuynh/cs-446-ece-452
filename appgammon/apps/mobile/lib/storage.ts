@@ -3,10 +3,13 @@
  */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SecureStore from "expo-secure-store";
+import { Platform } from "react-native";
 
 const STORAGE_KEYS = {
   DISPLAY_NAME: "@appgammon/display_name",
   DEVICE_ID: "@appgammon/device_id",
+  AUTH_TOKEN: "appgammon_auth_token",
 } as const;
 
 /**
@@ -50,6 +53,74 @@ export async function setDeviceId(id: string): Promise<void> {
     await AsyncStorage.setItem(STORAGE_KEYS.DEVICE_ID, id);
   } catch {
     console.error("Failed to save device ID");
+  }
+}
+
+export async function getAuthToken(): Promise<string | null> {
+  try {
+    if (Platform.OS === "web") {
+      return await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+    }
+    const secureToken = await SecureStore.getItemAsync(STORAGE_KEYS.AUTH_TOKEN);
+    if (secureToken) return secureToken;
+    return await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+  } catch {
+    try {
+      return await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+    } catch {
+      return null;
+    }
+  }
+}
+
+export async function setAuthToken(token: string): Promise<void> {
+  if (Platform.OS === "web") {
+    await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, token);
+    return;
+  }
+
+  let secureStoreError: unknown = null;
+  let asyncStorageError: unknown = null;
+
+  try {
+    await SecureStore.setItemAsync(STORAGE_KEYS.AUTH_TOKEN, token);
+  } catch (error) {
+    secureStoreError = error;
+  }
+
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, token);
+  } catch (error) {
+    asyncStorageError = error;
+  }
+
+  if (secureStoreError && asyncStorageError) {
+    throw new Error("Failed to persist auth token");
+  }
+
+  if (secureStoreError) {
+    console.warn(
+      "SecureStore unavailable for auth token; using AsyncStorage fallback",
+    );
+  }
+}
+
+export async function clearAuthToken(): Promise<void> {
+  if (Platform.OS === "web") {
+    await AsyncStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
+    return;
+  }
+
+  try {
+    await SecureStore.deleteItemAsync(STORAGE_KEYS.AUTH_TOKEN);
+  } catch {
+    // Best-effort clear
+  }
+
+  try {
+    await AsyncStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
+  } catch {
+    // Best-effort clear
   }
 }
 

@@ -3,12 +3,13 @@
  * Wireframe 4: Player list, scoreboard, start game button (host only), leave button
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
   StyleSheet,
   Alert,
+  Platform,
   SafeAreaView,
   ScrollView,
   TouchableOpacity,
@@ -17,15 +18,22 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Colors, Spacing, BorderRadius } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { api, SessionWithPlayers } from "@/lib/api";
+import { useSessionEvents } from "@/hooks/use-session-events";
+import { cancelSession, startGame } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { PlayerCard } from "@/components/ui/player-card";
 
+const STATUS_LABELS: Record<string, string> = {
+  open: "Waiting for opponent",
+  closed: "Ready to start",
+  in_game: "Game in progress",
+  cancelled: "Session cancelled",
+};
+
 export default function LobbyScreen() {
   const router = useRouter();
-  const { sessionId, displayName, isHost } = useLocalSearchParams<{
+  const { sessionId, isHost } = useLocalSearchParams<{
     sessionId: string;
-    displayName: string;
     isHost: string;
   }>();
   const colorScheme = useColorScheme() ?? "light";
@@ -33,71 +41,82 @@ export default function LobbyScreen() {
 
   const isHostBool = isHost === "true";
 
-  const [session, setSession] = useState<SessionWithPlayers | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { session, lastEvent } = useSessionEvents(sessionId);
+  const [isStarting, setIsStarting] = useState(false);
   const [score] = useState({ player1: 0, player2: 0 });
+  const navigatedRef = useRef(false);
 
-  // Fetch session data initially and poll for updates
-  const fetchSession = useCallback(async () => {
-    if (!sessionId) return;
+  // Navigate to game screen when game starts, or home when cancelled
+  useEffect(() => {
+    if (navigatedRef.current) return;
 
-    try {
-      const sessionData = await api.getSession(sessionId);
-      if (sessionData) {
-        setSession(sessionData);
-        setError(null);
-      } else {
-        setError("Session not found");
-      }
-    } catch (err) {
-      console.error("Error fetching session:", err);
-      setError("Failed to load session");
-    } finally {
-      setIsLoading(false);
+    const shouldExitSession =
+      lastEvent === "session_cancelled" || session?.status === "cancelled";
+    if (shouldExitSession) {
+      navigatedRef.current = true;
+      router.replace("/");
+      return;
     }
-  }, [sessionId]);
 
-  // Initial fetch
-  useEffect(() => {
-    fetchSession();
-  }, [fetchSession]);
+    const shouldEnterGame =
+      !!session &&
+      (lastEvent === "game_started" || session.status === "in_game");
 
-  // Poll for updates every 2 seconds
-  useEffect(() => {
-    if (!sessionId) return;
+    if (shouldEnterGame) {
+      navigatedRef.current = true;
+      router.replace({
+        pathname: "/game",
+        params: { sessionId: session.id },
+      });
+    }
+  }, [lastEvent, session, router]);
 
-    const interval = setInterval(fetchSession, 2000);
-    return () => clearInterval(interval);
-  }, [sessionId, fetchSession]);
+  const doLeave = useCallback(async () => {
+    if (sessionId) {
+      try {
+        await cancelSession(sessionId);
+      } catch {
+        // Best-effort cancel
+      }
+    }
+    router.replace("/");
+  }, [router, sessionId]);
 
   const handleLeave = useCallback(() => {
+    if (Platform.OS === "web") {
+      if (window.confirm("Are you sure you want to leave this session?")) {
+        doLeave();
+      }
+      return;
+    }
+
     Alert.alert(
       "Leave Session",
       "Are you sure you want to leave this session?",
       [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Leave",
-          style: "destructive",
-          onPress: () => router.replace("/"),
-        },
-      ]
+        { text: "Stay", style: "cancel" },
+        { text: "Leave", style: "destructive", onPress: doLeave },
+      ],
     );
-  }, [router]);
+  }, [doLeave]);
 
-  const handleStartGame = useCallback(() => {
-    if (!session?.player_2) {
+  const handleStartGame = useCallback(async () => {
+    if (!session?.player_2 || !sessionId) {
       Alert.alert("Cannot Start", "Waiting for an opponent to join.");
       return;
     }
-    // TODO: Navigate to game board screen
-    Alert.alert("Starting Game", "Game board not implemented yet!");
-  }, [session]);
-
-  const handleRematch = useCallback(() => {
-    Alert.alert("Rematch", "Rematch functionality not implemented yet!");
-  }, []);
+    setIsStarting(true);
+    try {
+      await startGame(sessionId);
+    } catch (err) {
+      Alert.alert(
+        "Error",
+        err instanceof Error ? err.message : "Failed to start game",
+      );
+    } finally {
+      setIsStarting(false);
+    }
+  }, [session, sessionId]);
 
   // Format session code with hyphen
   const formattedCode = sessionId
@@ -105,10 +124,10 @@ export default function LobbyScreen() {
     : "";
 
   // Determine if opponent has joined
-  const opponentJoined = session?.player_2 !== null;
+  const opponentJoined = session?.player_2 !== null && session?.player_2 !== undefined;
 
-  // Loading state
-  if (isLoading) {
+  // Loading state (no session data from SSE yet)
+  if (!session) {
     return (
       <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
         <View style={[styles.header, { backgroundColor: colors.header }]}>
@@ -122,31 +141,6 @@ export default function LobbyScreen() {
           <Text style={[styles.loadingText, { color: colors.textMuted }]}>
             Loading session...
           </Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  // Error state
-  if (error || !session) {
-    return (
-      <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
-        <View style={[styles.header, { backgroundColor: colors.header }]}>
-          <TouchableOpacity onPress={handleLeave} style={styles.leaveButton}>
-            <Text style={styles.leaveText}>Leave</Text>
-          </TouchableOpacity>
-          <View style={styles.headerSpacer} />
-        </View>
-        <View style={styles.loadingContainer}>
-          <Text style={[styles.errorText, { color: "#EF4444" }]}>
-            {error || "Session not found"}
-          </Text>
-          <Button
-            title="Go Back"
-            variant="primary"
-            onPress={() => router.replace("/")}
-            style={{ marginTop: Spacing.md }}
-          />
         </View>
       </SafeAreaView>
     );
@@ -173,7 +167,7 @@ export default function LobbyScreen() {
 
         {/* Session Status */}
         <Text style={[styles.statusLabel, { color: colors.textMuted }]}>
-          Status: {session.status}
+          {STATUS_LABELS[session.status] ?? session.status}
         </Text>
 
         {/* Players Section */}
@@ -222,11 +216,11 @@ export default function LobbyScreen() {
         <View style={styles.actionSection}>
           {isHostBool && (
             <Button
-              title="Start Game"
+              title={isStarting ? "Starting..." : "Start Game"}
               variant="primary"
               size="lg"
               fullWidth
-              disabled={!opponentJoined}
+              disabled={!opponentJoined || isStarting}
               onPress={handleStartGame}
             />
           )}
@@ -243,13 +237,19 @@ export default function LobbyScreen() {
             </Text>
           )}
 
+          {!isHostBool && opponentJoined && (
+            <Text style={[styles.waitingHostText, { color: colors.textMuted }]}>
+              Waiting for host to start the game...
+            </Text>
+          )}
+
           <Button
             title="Rematch (post-game)"
             variant="ghost"
             size="md"
             fullWidth
             disabled
-            onPress={handleRematch}
+            onPress={() => {}}
             style={styles.rematchButton}
           />
         </View>
@@ -296,10 +296,6 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: Spacing.md,
     fontSize: 16,
-  },
-  errorText: {
-    fontSize: 16,
-    textAlign: "center",
   },
   codeLabel: {
     fontSize: 14,

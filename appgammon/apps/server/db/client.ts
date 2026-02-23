@@ -1,9 +1,10 @@
+import path from "node:path";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import * as schema from "./schema";
 import dotenv from "dotenv";
 
-dotenv.config({ path: "../.env", override: false });
+dotenv.config({ path: path.resolve(__dirname, "../.env"), override: false });
 
 const host = process.env.DB_HOST || "localhost";
 const isLocalhost = host === "localhost" || host === "127.0.0.1";

@@ -47,21 +47,29 @@ export default function RootLayout() {
           name="create"
           options={{
             title: "Create Game",
-            headerBackTitle: "Back",
+            headerBackVisible: false,
+            gestureEnabled: false,
           }}
         />
         <Stack.Screen
           name="join"
           options={{
             title: "Join Game",
-            headerBackTitle: "Back",
+            headerBackTitle: "Home",
           }}
         />
         <Stack.Screen
           name="lobby"
           options={{
+            headerShown: false,
+            gestureEnabled: false,
+          }}
+        />
+        <Stack.Screen
+          name="game"
+          options={{
             title: "",
-            headerLeft: () => null,
+            headerShown: false,
             gestureEnabled: false,
           }}
         />

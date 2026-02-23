@@ -5,7 +5,7 @@ import { generateId } from "../utils/id";
 export const players = pgTable("players", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: text("name").notNull(),
-  device_id: text("device_id").notNull(),
+  device_id: text("device_id").notNull().unique(),
   device_token: text("device_token"), // https://developer.apple.com/documentation/usernotifications/registering-your-app-with-apns
   created_at: timestamp("created_at").defaultNow().notNull(),
 });

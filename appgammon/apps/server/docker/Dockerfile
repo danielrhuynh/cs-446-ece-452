@@ -5,12 +5,12 @@ WORKDIR /app
 
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 
-COPY server/package.json server/
+COPY apps/server/package.json apps/server/
 COPY packages/common/package.json packages/common/
 
 RUN pnpm install --frozen-lockfile
 
-COPY server/ server/
+COPY apps/server/ apps/server/
 COPY packages/common/ packages/common/
 EXPOSE 3000
 
