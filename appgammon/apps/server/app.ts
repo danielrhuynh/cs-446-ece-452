@@ -5,16 +5,6 @@ import { logger } from "./utils/logger";
 
 const app = new Hono();
 
-const configuredOrigins = (process.env.CORS_ORIGINS ?? "")
-  .split(",")
-  .map((origin) => origin.trim())
-  .filter(Boolean);
-
-const corsOrigins =
-  configuredOrigins.length > 0
-    ? configuredOrigins
-    : ["http://localhost:8081", "http://localhost:19006", "http://localhost:3000"];
-
 app.use("*", async (c, next) => {
   const start = Date.now();
   await next();
@@ -29,9 +19,8 @@ app.use("*", async (c, next) => {
   );
 });
 
-// CORS allowlist (configurable via CORS_ORIGINS)
 app.use("*", cors({
-  origin: corsOrigins,
+  origin: "*",
   allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowHeaders: ["Content-Type", "Authorization", "X-Device-Id"],
 }));
