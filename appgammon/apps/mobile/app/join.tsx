@@ -228,6 +228,24 @@ export default function JoinSessionScreen() {
                   <Text style={[styles.changeName, { color: colors.primary }]}>Change</Text>
                 </TouchableOpacity>
               </Animated.View>
+            ) : checkedName ? (
+              <Animated.View entering={FadeInDown.delay(60).duration(260)} style={styles.wrap}>
+                <TouchableOpacity
+                  style={styles.nameRow}
+                  onPress={() => {
+                    setNameInput("");
+                    setShowNameModal(true);
+                  }}
+                  activeOpacity={0.7}
+                  accessibilityLabel="Set your display name"
+                  accessibilityRole="button"
+                >
+                  <Text style={[styles.joiningAs, { color: colors.textMuted }]}>
+                    No display name set
+                  </Text>
+                  <Text style={[styles.changeName, { color: colors.primary }]}>Set Name</Text>
+                </TouchableOpacity>
+              </Animated.View>
             ) : null}
 
             {error ? (
@@ -295,7 +313,9 @@ export default function JoinSessionScreen() {
         visible={showNameModal}
         transparent
         animationType="fade"
-        onRequestClose={() => setShowNameModal(false)}
+        onRequestClose={() => {
+          if (resolvedDisplayName) setShowNameModal(false);
+        }}
       >
         <KeyboardAvoidingView
           style={styles.modalOverlay}
@@ -303,7 +323,9 @@ export default function JoinSessionScreen() {
         >
           <Pressable
             style={styles.modalBackdrop}
-            onPress={() => setShowNameModal(false)}
+            onPress={() => {
+              if (resolvedDisplayName) setShowNameModal(false);
+            }}
           >
             <Pressable onPress={(e) => e.stopPropagation()} style={styles.modalCardWrap}>
               <LiquidGlass style={[styles.nameModalCard, Shadows.lg]}>
