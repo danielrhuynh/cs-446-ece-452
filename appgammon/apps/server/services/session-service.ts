@@ -1,8 +1,18 @@
 import { session_status } from "@appgammon/common";
+import type { SessionWithPlayers } from "@appgammon/common";
 import { db } from "../db/client";
 import { sessions, players } from "../db/schema";
-import { and, eq, ne, isNull } from "drizzle-orm";
+import { and, eq, ne, or, isNull } from "drizzle-orm";
 import { logger } from "../utils/logger";
+
+function isMissingOnConflictConstraintError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: string }).code === "42P10"
+  );
+}
 
 export async function create_session(player_1_id: string) {
   const [session] = await db
@@ -80,10 +90,10 @@ export async function get_session(session_id: string) {
 
   return {
     id: session.id,
-    status: session.status,
+    status: session.status as SessionWithPlayers["status"],
     player_1_id: session.player_1_id,
     player_2_id: session.player_2_id,
-    created_at: session.created_at,
+    created_at: session.created_at.toISOString(),
     player_1: {
       id: session.player_1_id,
       name: session.player_1_name,
@@ -94,17 +104,89 @@ export async function get_session(session_id: string) {
           name: player_2_name,
         }
       : null,
-  };
+  } satisfies SessionWithPlayers;
+}
+
+export async function start_session(session_id: string, host_player_id: string) {
+  const [session] = await db
+    .update(sessions)
+    .set({ status: session_status.in_game })
+    .where(
+      and(
+        eq(sessions.id, session_id),
+        eq(sessions.status, session_status.closed),
+        eq(sessions.player_1_id, host_player_id),
+      ),
+    )
+    .returning();
+
+  if (!session) {
+    logger.info("[SESSION] Could not start session");
+  } else {
+    logger.info({ session }, "[SESSION] Started session");
+  }
+
+  return session ?? null;
+}
+
+export async function cancel_session(session_id: string, player_id: string) {
+  const [session] = await db
+    .update(sessions)
+    .set({ status: session_status.cancelled })
+    .where(
+      and(
+        eq(sessions.id, session_id),
+        or(
+          eq(sessions.status, session_status.open),
+          eq(sessions.status, session_status.closed),
+          eq(sessions.status, session_status.in_game),
+        ),
+        or(
+          eq(sessions.player_1_id, player_id),
+          eq(sessions.player_2_id, player_id),
+        ),
+      ),
+    )
+    .returning();
+
+  if (!session) {
+    logger.info("[SESSION] Could not cancel session");
+  } else {
+    logger.info({ session }, "[SESSION] Cancelled session");
+  }
+
+  return session ?? null;
 }
 
 export async function get_or_create_player(device_id: string, name: string) {
+  try {
+    const [player] = await db
+      .insert(players)
+      .values({ device_id: device_id, name: name })
+      .onConflictDoUpdate({
+        target: players.device_id,
+        set: { name: name },
+      })
+      .returning();
+
+    logger.info({ player }, "[SESSION] Upserted player by device_id");
+    return player;
+  } catch (error) {
+    if (!isMissingOnConflictConstraintError(error)) {
+      throw error;
+    }
+    // Backward compatibility: allow runtime before unique(device_id) migration is applied.
+    logger.warn(
+      "[SESSION] players.device_id unique constraint missing; using legacy player lookup path",
+    );
+  }
+
   const [existing] = await db
     .select()
     .from(players)
     .where(eq(players.device_id, device_id));
 
   if (existing) {
-    // Update the player's name if it changed
     if (existing.name !== name) {
       const [updated] = await db
         .update(players)
@@ -123,6 +205,6 @@ export async function get_or_create_player(device_id: string, name: string) {
     .values({ device_id: device_id, name: name })
     .returning();
 
-  logger.info({ player }, "[SESSION] Creating new player");
+  logger.info({ player }, "[SESSION] Created player via fallback path");
   return player;
 }

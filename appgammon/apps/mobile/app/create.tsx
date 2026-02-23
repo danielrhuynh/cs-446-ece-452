@@ -3,7 +3,7 @@
  * Wireframe 2: Session code, share button, game settings, waiting indicator
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -18,7 +18,9 @@ import * as Sharing from "expo-sharing";
 import { Colors, Spacing, BorderRadius } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useDeviceId } from "@/hooks/use-device-id";
-import { api, Session } from "@/lib/api";
+import { useSessionEvents } from "@/hooks/use-session-events";
+import { createSession, cancelSession, type CreateSessionRes } from "@/lib/api";
+import { setAuthToken } from "@/lib/storage";
 import { Button } from "@/components/ui/button";
 import { CodeDisplay } from "@/components/ui/code-display";
 
@@ -31,9 +33,10 @@ export default function CreateSessionScreen() {
   const colorScheme = useColorScheme() ?? "light";
   const colors = Colors[colorScheme];
 
-  const [session, setSession] = useState<Session | null>(null);
+  const [session, setSession] = useState<CreateSessionRes | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState("");
+  const createRequestedRef = useRef(false);
 
   // Game settings (UI only for now - not wired to backend)
   const [bestOf, setBestOf] = useState<BestOf>(3);
@@ -41,16 +44,19 @@ export default function CreateSessionScreen() {
 
   // Create session on mount
   useEffect(() => {
-    async function createSession() {
-      if (!deviceId || !displayName) return;
+    async function doCreateSession() {
+      if (!deviceId || !displayName || createRequestedRef.current) return;
 
+      createRequestedRef.current = true;
       setIsCreating(true);
       setError("");
 
       try {
-        const newSession = await api.createSession(deviceId, displayName);
+        const newSession = await createSession(deviceId, displayName);
+        await setAuthToken(newSession.auth_token);
         setSession(newSession);
       } catch (err) {
+        createRequestedRef.current = false;
         setError(
           err instanceof Error ? err.message : "Failed to create session",
         );
@@ -60,35 +66,58 @@ export default function CreateSessionScreen() {
     }
 
     if (!deviceIdLoading && deviceId) {
-      createSession();
+      doCreateSession();
     }
   }, [deviceId, deviceIdLoading, displayName]);
 
-  // Poll for opponent joining
+  // SSE: listen for opponent joining
+  const { session: sseSession, lastEvent: sseEvent } = useSessionEvents(
+    session?.id,
+  );
+  const navigatedRef = useRef(false);
+
   useEffect(() => {
-    if (!session || session.status !== "open") return;
+    if (navigatedRef.current) return;
 
-    const interval = setInterval(async () => {
-      try {
-        const updatedSession = await api.getSession(session.id);
-        if (updatedSession && updatedSession.status === "active") {
-          // Opponent joined! Navigate to lobby
-          router.replace({
-            pathname: "/lobby",
-            params: {
-              sessionId: session.id,
-              displayName,
-              isHost: "true",
-            },
-          });
-        }
-      } catch {
-        // Polling endpoint not implemented yet, ignore
-      }
-    }, 2000);
+    const latestSession = sseSession ?? session;
 
-    return () => clearInterval(interval);
-  }, [session, displayName, router]);
+    if (sseEvent === "session_cancelled" || latestSession?.status === "cancelled") {
+      navigatedRef.current = true;
+      router.replace("/");
+      return;
+    }
+
+    const shouldEnterLobby =
+      !!latestSession &&
+      (sseEvent === "player_joined" ||
+        latestSession.status === "closed" ||
+        latestSession.status === "in_game");
+
+    if (shouldEnterLobby) {
+      navigatedRef.current = true;
+      router.replace({
+        pathname: "/lobby",
+        params: {
+          sessionId: latestSession.id,
+          displayName,
+          isHost: "true",
+        },
+      });
+    }
+  }, [sseEvent, session, sseSession, displayName, router]);
+
+  const handleCancel = async () => {
+    if (!session) {
+      router.replace("/");
+      return;
+    }
+    try {
+      await cancelSession(session.id);
+    } catch {
+      // Best-effort cancel
+    }
+    router.replace("/");
+  };
 
   const handleShare = async () => {
     if (!session) return;
@@ -108,18 +137,6 @@ export default function CreateSessionScreen() {
     } catch {
       Alert.alert("Share Code", message);
     }
-  };
-
-  const handleGoToLobby = () => {
-    if (!session) return;
-    router.replace({
-      pathname: "/lobby",
-      params: {
-        sessionId: session.id,
-        displayName,
-        isHost: "true",
-      },
-    });
   };
 
   if (deviceIdLoading || isCreating) {
@@ -251,11 +268,11 @@ export default function CreateSessionScreen() {
           />
         </View>
 
-        {/* Debug: Go to Lobby manually */}
+        {/* Cancel Session */}
         <Button
-          title="Go to Lobby (Debug)"
+          title="Cancel"
           variant="outline"
-          onPress={handleGoToLobby}
+          onPress={handleCancel}
           style={{ marginTop: Spacing.xl }}
         />
       </ScrollView>

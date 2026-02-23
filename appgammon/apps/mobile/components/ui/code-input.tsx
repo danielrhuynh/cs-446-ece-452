@@ -7,7 +7,6 @@ import {
   View,
   TextInput,
   StyleSheet,
-  Text,
   NativeSyntheticEvent,
   TextInputKeyPressEventData,
 } from "react-native";
@@ -77,7 +76,9 @@ export function CodeInput({ length = 6, value, onChange }: CodeInputProps) {
       {codeArray.map((char, index) => (
         <TextInput
           key={index}
-          ref={(ref) => (inputRefs.current[index] = ref)}
+          ref={(ref) => {
+            inputRefs.current[index] = ref;
+          }}
           style={[
             styles.box,
             {

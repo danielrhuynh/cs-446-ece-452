@@ -1,0 +1,1 @@
+ALTER TABLE "players" ADD CONSTRAINT "players_device_id_unique" UNIQUE("device_id");

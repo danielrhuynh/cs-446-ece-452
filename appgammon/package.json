@@ -2,6 +2,10 @@
   "name": "appgammon-monorepo",
   "private": true,
   "scripts": {
+    "dev": "pnpm --parallel --stream --filter mobile --filter server run dev",
+    "lint": "pnpm --filter mobile run lint",
+    "typecheck": "pnpm --filter mobile run typecheck && pnpm --filter server run typecheck",
+    "test": "pnpm --filter server run test",
     "mobile": "pnpm --filter mobile",
     "server": "pnpm --filter server"
   }

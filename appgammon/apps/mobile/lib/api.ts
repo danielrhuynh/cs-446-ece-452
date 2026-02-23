@@ -1,113 +1,112 @@
-/**
- * API client for communicating with the backend server
- */
+import { hc, type InferResponseType } from "hono/client";
+import { getAuthToken, getDeviceId } from "@/lib/storage";
+import { API_BASE_URL } from "@/lib/api-base-url";
+import type { AppType } from "@server/app";
 
-import { Platform } from "react-native";
+const REQUEST_TIMEOUT_MS = 10000;
 
-const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL ||
-  Platform.select({
-    web: "http://localhost:3000",
-    default: "http://10.0.0.206:3000",
-  });
+const client = hc<AppType>(API_BASE_URL, {
+  fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+    const [token, deviceId] = await Promise.all([
+      getAuthToken(),
+      getDeviceId(),
+    ]);
 
-export interface PlayerInfo {
-  id: string;
-  name: string | null;
-}
+    const headers = new Headers(init?.headers);
+    headers.set("Content-Type", "application/json");
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    if (deviceId) headers.set("X-Device-Id", deviceId);
 
-export interface Session {
-  id: string;
-  status: "open" | "active" | "closed";
-  player_1_id: string;
-  player_2_id: string | null;
-  created_at: string;
-}
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-export interface SessionWithPlayers extends Session {
-  player_1: PlayerInfo;
-  player_2: PlayerInfo | null;
-}
-
-export interface ApiError {
-  error: string;
-}
-
-class ApiClient {
-  private baseUrl: string;
-
-  constructor(baseUrl: string) {
-    this.baseUrl = baseUrl;
-  }
-
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {},
-  ): Promise<T> {
-    const url = `${this.baseUrl}${endpoint}`;
-    console.log(`[API] ${options.method || "GET"} ${url}`);
-
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        "Content-Type": "application/json",
-        ...options.headers,
-      },
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error((data as ApiError).error || "An error occurred");
-    }
-
-    return data as T;
-  }
-
-  /**
-   * Create a new game session
-   */
-  async createSession(deviceId: string, displayName: string): Promise<Session> {
-    return this.request<Session>("/sessions/create", {
-      method: "POST",
-      body: JSON.stringify({
-        device_id: deviceId,
-        display_name: displayName,
-      }),
-    });
-  }
-
-  /**
-   * Join an existing game session
-   */
-  async joinSession(
-    deviceId: string,
-    displayName: string,
-    sessionId: string,
-  ): Promise<Session> {
-    return this.request<Session>("/sessions/join", {
-      method: "POST",
-      body: JSON.stringify({
-        device_id: deviceId,
-        display_name: displayName,
-        session_id: sessionId.toUpperCase().replace(/-/g, ""),
-      }),
-    });
-  }
-
-  /**
-   * Get session details with player names (for lobby polling)
-   */
-  async getSession(sessionId: string): Promise<SessionWithPlayers | null> {
     try {
-      return await this.request<SessionWithPlayers>(
-        `/sessions/${sessionId.toUpperCase().replace(/-/g, "")}`,
-      );
+      return await fetch(input, { ...init, headers, signal: controller.signal });
     } catch (error) {
-      console.log("[API] getSession error:", error);
-      return null;
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new Error(
+          `Request timed out after ${REQUEST_TIMEOUT_MS / 1000}s. ` +
+            `Cannot reach backend at ${API_BASE_URL}.`,
+        );
+      }
+      throw new Error(
+        `Network request failed. Cannot reach backend at ${API_BASE_URL}.`,
+      );
+    } finally {
+      clearTimeout(timeoutId);
     }
+  },
+});
+
+async function unwrap<T>(res: { ok: boolean; json(): Promise<unknown> }): Promise<T> {
+  let data: unknown;
+  try {
+    data = await res.json();
+  } catch {
+    data = null;
   }
+
+  if (!res.ok) {
+    throw new Error(
+      (data as { error?: string } | null)?.error ??
+        "The server returned an invalid error response",
+    );
+  }
+
+  if (data === null) {
+    throw new Error("The server returned an empty response");
+  }
+
+  return data as T;
 }
 
-export const api = new ApiClient(API_BASE_URL);
+// Inferred response types from RPC routes (success-only, errors are thrown)
+export type CreateSessionRes = InferResponseType<typeof client.sessions.create.$post, 200>;
+export type JoinSessionRes = InferResponseType<typeof client.sessions.join.$post, 200>;
+export type GetSessionRes = InferResponseType<typeof client.sessions[":id"]["$get"], 200>;
+export type StartGameRes = InferResponseType<typeof client.sessions[":id"]["start"]["$post"], 200>;
+export type CancelSessionRes = InferResponseType<typeof client.sessions[":id"]["cancel"]["$post"], 200>;
+
+export async function createSession(deviceId: string, displayName: string) {
+  const res = await client.sessions.create.$post({
+    json: { device_id: deviceId, display_name: displayName },
+  });
+  return unwrap<CreateSessionRes>(res);
+}
+
+export async function joinSession(deviceId: string, displayName: string, sessionId: string) {
+  const res = await client.sessions.join.$post({
+    json: {
+      device_id: deviceId,
+      display_name: displayName,
+      session_id: sessionId.toUpperCase().replace(/-/g, ""),
+    },
+  });
+  return unwrap<JoinSessionRes>(res);
+}
+
+export async function startGame(sessionId: string) {
+  const res = await client.sessions[":id"].start.$post({
+    param: { id: sessionId.toUpperCase().replace(/-/g, "") },
+  });
+  return unwrap<StartGameRes>(res);
+}
+
+export async function cancelSession(sessionId: string) {
+  const res = await client.sessions[":id"].cancel.$post({
+    param: { id: sessionId.toUpperCase().replace(/-/g, "") },
+  });
+  return unwrap<CancelSessionRes>(res);
+}
+
+export async function getSession(sessionId: string) {
+  try {
+    const res = await client.sessions[":id"].$get({
+      param: { id: sessionId.toUpperCase().replace(/-/g, "") },
+    });
+    return await unwrap<GetSessionRes>(res);
+  } catch (error) {
+    console.log("[API] getSession error:", error);
+    return null;
+  }
+}

@@ -1,0 +1,38 @@
+default: dev
+
+dev: db-up db-migrate
+    pnpm dev
+
+ios: db-up db-migrate
+    pnpm --filter server run dev & pnpm --filter mobile run ios & wait
+
+db-up:
+    docker compose -f apps/server/docker/docker-compose.yaml up -d
+    @echo "Waiting for Postgres to be ready..."
+    @until docker exec appgammon-db pg_isready -U appgammon > /dev/null 2>&1; do sleep 0.5; done
+    @echo "Postgres is ready."
+
+db-down:
+    docker compose -f apps/server/docker/docker-compose.yaml down
+
+db-reset:
+    docker compose -f apps/server/docker/docker-compose.yaml down -v
+    just db-up db-migrate
+
+db-migrate:
+    pnpm --filter server run db:migrate
+
+db-generate:
+    pnpm --filter server run db:generate
+
+db-studio:
+    pnpm --filter server run db:studio
+
+test:
+    pnpm test
+
+typecheck:
+    pnpm typecheck
+
+lint:
+    pnpm lint
