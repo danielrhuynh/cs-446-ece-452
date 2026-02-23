@@ -83,9 +83,8 @@ export default function RootLayout() {
           name="create"
           options={{
             title: "Create Game",
-            headerBackVisible: true,
-            headerBackTitle: "Home",
-            gestureEnabled: true,
+            headerBackVisible: false,
+            gestureEnabled: false,
           }}
         />
         <Stack.Screen
