@@ -75,13 +75,13 @@ export default function HomeScreen() {
               entering={FadeIn.duration(500)}
               style={[styles.logoCircle, { borderColor: colors.primary }]}
             >
-              <Text style={[styles.logoText, { color: colors.primary }]}>BG</Text>
+              <Text style={[styles.logoText, { color: colors.primary }]}>AG</Text>
             </Animated.View>
             <Animated.Text
               entering={FadeIn.delay(80).duration(400)}
               style={[styles.title, { color: colors.text }]}
             >
-              Backgammon
+              Appgammon
             </Animated.Text>
             <Animated.Text
               entering={FadeIn.delay(160).duration(400)}
