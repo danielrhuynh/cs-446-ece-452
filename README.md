@@ -1,4 +1,4 @@
-# CS 446 Team (Name TBD)
+# CS 446 (Leo's Team)
 
 We will add a project description here once we decide what to do!
 
