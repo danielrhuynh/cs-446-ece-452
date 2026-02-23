@@ -8,17 +8,20 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   ActivityIndicator,
   Alert,
   Platform,
-  TouchableOpacity,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Colors, Spacing } from "@/constants/theme";
+import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
+import { Colors, Fonts, Spacing, BorderRadius, Layout, Shadows } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useSessionEvents } from "@/hooks/use-session-events";
 import { cancelSession } from "@/lib/api";
+import { formatSessionCode } from "@/lib/format";
+import { LiquidGlass } from "@/components/ui/liquid-glass";
+import { ScreenContainer } from "@/components/ui/screen-container";
+import { BackButton } from "@/components/ui/back-button";
 
 export default function GameScreen() {
   const router = useRouter();
@@ -30,8 +33,7 @@ export default function GameScreen() {
   const navigatedRef = useRef(false);
 
   useEffect(() => {
-    const shouldExitSession =
-      lastEvent === "session_cancelled" || session?.status === "cancelled";
+    const shouldExitSession = lastEvent === "session_cancelled" || session?.status === "cancelled";
 
     if (shouldExitSession && !navigatedRef.current) {
       navigatedRef.current = true;
@@ -53,96 +55,75 @@ export default function GameScreen() {
   const handleLeave = useCallback(() => {
     if (Platform.OS === "web") {
       if (window.confirm("Are you sure you want to leave? The session will be cancelled.")) {
-        doLeave();
+        void doLeave();
       }
       return;
     }
 
-    Alert.alert(
-      "Leave Game",
-      "Are you sure you want to leave? The session will be cancelled.",
-      [
-        { text: "Stay", style: "cancel" },
-        { text: "Leave", style: "destructive", onPress: doLeave },
-      ],
-    );
+    Alert.alert("Leave Game", "Are you sure you want to leave? The session will be cancelled.", [
+      { text: "Stay", style: "cancel" },
+      { text: "Leave", style: "destructive", onPress: () => void doLeave() },
+    ]);
   }, [doLeave]);
+
+  const formattedCode = sessionId ? formatSessionCode(sessionId) : "";
 
   if (!session) {
     return (
-      <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
-        <View style={[styles.header, { backgroundColor: colors.header }]}>
-          <TouchableOpacity onPress={handleLeave} style={styles.leaveButton}>
-            <Text style={styles.leaveText}>Leave</Text>
-          </TouchableOpacity>
-          <View style={styles.headerSpacer} />
+      <ScreenContainer>
+        <View style={styles.headerWrap}>
+          <BackButton onPress={handleLeave} />
         </View>
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.primary} />
+          <LiquidGlass style={[styles.loadingCard, Shadows.md]}>
+            <ActivityIndicator size="large" color={colors.primary} />
+          </LiquidGlass>
         </View>
-      </SafeAreaView>
+      </ScreenContainer>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { backgroundColor: colors.header }]}>
-        <TouchableOpacity onPress={handleLeave} style={styles.leaveButton}>
-          <Text style={styles.leaveText}>Leave</Text>
-        </TouchableOpacity>
-        <View style={styles.headerSpacer} />
+    <ScreenContainer>
+      <View style={styles.headerWrap}>
+        <BackButton onPress={handleLeave} />
       </View>
       <View style={styles.container}>
-        <Text style={[styles.title, { color: colors.text }]}>
-          Game in Progress
-        </Text>
+        <Animated.View entering={FadeIn.duration(300)}>
+          <LiquidGlass style={[styles.mainCard, Shadows.md]}>
+            <Text style={[styles.title, { color: colors.text }]}>Game in Progress</Text>
 
-        <Text style={[styles.sessionCode, { color: colors.textMuted }]}>
-          Session: {session.id}
-        </Text>
+            <Text style={[styles.sessionCode, { color: colors.textMuted }]}>Session: {formattedCode}</Text>
 
-        <View style={styles.playersContainer}>
-          <Text style={[styles.playerName, { color: colors.text }]}>
-            {session.player_1?.name ?? "Player 1"}
-          </Text>
-          <Text style={[styles.vs, { color: colors.textMuted }]}>vs</Text>
-          <Text style={[styles.playerName, { color: colors.text }]}>
-            {session.player_2?.name ?? "Player 2"}
-          </Text>
-        </View>
+            <Animated.View entering={FadeInDown.delay(100).duration(250)} style={styles.playersContainer}>
+              <Text style={[styles.playerName, { color: colors.text }]}>{session.player_1?.name ?? "Player 1"}</Text>
+              <Text style={[styles.vs, { color: colors.textMuted }]}>vs</Text>
+              <Text style={[styles.playerName, { color: colors.text }]}>{session.player_2?.name ?? "Player 2"}</Text>
+            </Animated.View>
 
-        <Text style={[styles.placeholder, { color: colors.textMuted }]}>
-          Board coming soon...
-        </Text>
+            <Text style={[styles.placeholder, { color: colors.textMuted }]}>Board coming soon...</Text>
+          </LiquidGlass>
+        </Animated.View>
       </View>
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
+  headerWrap: {
     paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-  },
-  leaveButton: {
-    paddingVertical: Spacing.xs,
-    paddingHorizontal: Spacing.sm,
-  },
-  leaveText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "500",
-  },
-  headerSpacer: {
-    flex: 1,
+    paddingTop: Spacing.xs,
+    alignItems: "flex-start",
   },
   center: {
     flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingCard: {
+    width: 100,
+    height: 100,
+    borderRadius: BorderRadius.full,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -152,29 +133,39 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: Spacing.lg,
   },
+  mainCard: {
+    width: "100%",
+    maxWidth: Layout.contentMaxWidth,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.xl,
+    alignItems: "center",
+  },
   title: {
     fontSize: 24,
-    fontWeight: "700",
-    marginBottom: Spacing.md,
+    fontFamily: Fonts.display,
+    marginBottom: Spacing.sm,
   },
   sessionCode: {
     fontSize: 14,
-    marginBottom: Spacing.xl,
+    marginBottom: Spacing.lg,
+    fontFamily: Fonts.medium,
+    letterSpacing: 0.5,
   },
   playersContainer: {
     alignItems: "center",
-    gap: Spacing.sm,
-    marginBottom: Spacing.xl,
+    gap: Spacing.xs,
+    marginBottom: Spacing.lg,
   },
   playerName: {
-    fontSize: 20,
-    fontWeight: "600",
+    fontSize: 22,
+    fontFamily: Fonts.semibold,
   },
   vs: {
-    fontSize: 16,
+    fontSize: 15,
+    fontFamily: Fonts.medium,
   },
   placeholder: {
     fontSize: 16,
-    fontStyle: "italic",
+    fontFamily: Fonts.medium,
   },
 });

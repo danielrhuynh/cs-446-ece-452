@@ -1,6 +1,6 @@
 /**
- * Home/Landing Screen
- * Wireframe 1: Logo, display name input, Create/Join buttons
+ * Home / Landing Screen
+ * Logo, display name input, Create / Join buttons
  */
 
 import { useState, useEffect } from "react";
@@ -10,170 +10,174 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
 } from "react-native";
-import { useRouter } from "expo-router";
-import { Colors, Spacing, BorderRadius } from "@/constants/theme";
+import { useRouter, useLocalSearchParams } from "expo-router";
+import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
+import { Colors, Fonts, Spacing, BorderRadius, Layout, Shadows } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { getDisplayName, setDisplayName } from "@/lib/storage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { LiquidGlass } from "@/components/ui/liquid-glass";
+import { ScreenContainer } from "@/components/ui/screen-container";
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { pendingSessionCode } = useLocalSearchParams<{ pendingSessionCode?: string }>();
   const colorScheme = useColorScheme() ?? "light";
   const colors = Colors[colorScheme];
 
   const [displayNameValue, setDisplayNameValue] = useState("");
   const [error, setError] = useState("");
 
-  // Load saved display name on mount
   useEffect(() => {
     async function loadDisplayName() {
       const savedName = await getDisplayName();
-      if (savedName) {
-        setDisplayNameValue(savedName);
-      }
+      if (savedName) setDisplayNameValue(savedName);
     }
     loadDisplayName();
   }, []);
 
-  const handleCreateGame = async () => {
+  const validate = () => {
     if (!displayNameValue.trim()) {
       setError("Please enter a display name");
-      return;
+      return false;
     }
-
     setError("");
+    return true;
+  };
+
+  const handleCreateGame = async () => {
+    if (!validate()) return;
     await setDisplayName(displayNameValue.trim());
-    router.push({
-      pathname: "/create",
-      params: { displayName: displayNameValue.trim() },
-    });
+    router.push({ pathname: "/create", params: { displayName: displayNameValue.trim() } });
   };
 
   const handleJoinGame = async () => {
-    if (!displayNameValue.trim()) {
-      setError("Please enter a display name");
-      return;
-    }
-
-    setError("");
+    if (!validate()) return;
     await setDisplayName(displayNameValue.trim());
     router.push({
       pathname: "/join",
-      params: { displayName: displayNameValue.trim() },
+      params: { displayName: displayNameValue.trim(), sessionCode: pendingSessionCode },
     });
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+    <ScreenContainer>
       <KeyboardAvoidingView
         style={styles.keyboardView}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <View style={styles.container}>
-          {/* Logo Section */}
+          {/* Logo */}
           <View style={styles.logoSection}>
-            <Text style={[styles.title, { color: colors.text }]}>
-              BACKGAMMON
-            </Text>
-            <View style={[styles.logoCircle, { borderColor: colors.primary }]}>
+            <Animated.View
+              entering={FadeIn.duration(500)}
+              style={[styles.logoCircle, { borderColor: colors.primary }]}
+            >
               <Text style={[styles.logoText, { color: colors.primary }]}>BG</Text>
-            </View>
+            </Animated.View>
+            <Animated.Text
+              entering={FadeIn.delay(80).duration(400)}
+              style={[styles.title, { color: colors.text }]}
+            >
+              Backgammon
+            </Animated.Text>
+            <Animated.Text
+              entering={FadeIn.delay(160).duration(400)}
+              style={[styles.subtitle, { color: colors.textMuted }]}
+            >
+              Play with friends — no account needed
+            </Animated.Text>
           </View>
 
-          {/* Input Section */}
-          <View style={styles.inputSection}>
-            <Input
-              placeholder="Enter display name..."
-              value={displayNameValue}
-              onChangeText={(text) => {
-                setDisplayNameValue(text);
-                if (error) setError("");
-              }}
-              error={error}
-              autoCapitalize="words"
-              autoCorrect={false}
-              maxLength={20}
-            />
-          </View>
+          {/* Card */}
+          <Animated.View entering={FadeInDown.delay(200).duration(380)} style={styles.cardWrap}>
+            <LiquidGlass style={[styles.mainCard, Shadows.md]}>
+              <View style={styles.inputSection}>
+                <Input
+                  label="Your display name"
+                  placeholder="e.g. John"
+                  value={displayNameValue}
+                  onChangeText={(text) => {
+                    setDisplayNameValue(text);
+                    if (error) setError("");
+                  }}
+                  error={error}
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                  maxLength={20}
+                  accessibilityLabel="Display name"
+                  accessibilityHint="Enter the name others will see during the game"
+                />
+              </View>
 
-          {/* Buttons Section */}
-          <View style={styles.buttonSection}>
-            <Button
-              title="Create Game"
-              variant="primary"
-              size="lg"
-              fullWidth
-              onPress={handleCreateGame}
-            />
-            <Button
-              title="Join Game"
-              variant="secondary"
-              size="lg"
-              fullWidth
-              onPress={handleJoinGame}
-            />
-          </View>
-
-          {/* Footer */}
-          <Text style={[styles.footer, { color: colors.textMuted }]}>
-            No account needed
-          </Text>
+              <View style={styles.buttonSection}>
+                <Button
+                  title="Create Game"
+                  variant="primary"
+                  size="lg"
+                  fullWidth
+                  onPress={handleCreateGame}
+                  accessibilityLabel="Create a new game"
+                  accessibilityHint="Creates a new session and gives you a code to share"
+                />
+                <Button
+                  title="Join Game"
+                  variant="outline"
+                  size="lg"
+                  fullWidth
+                  onPress={handleJoinGame}
+                  accessibilityLabel="Join an existing game"
+                  accessibilityHint="Enter a code from a friend to join their game"
+                />
+              </View>
+            </LiquidGlass>
+          </Animated.View>
         </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-  },
-  keyboardView: {
-    flex: 1,
-  },
+  keyboardView: { flex: 1 },
   container: {
     flex: 1,
-    paddingHorizontal: Spacing.xl,
+    paddingHorizontal: Spacing.lg,
     justifyContent: "center",
     alignItems: "center",
+    gap: Spacing.xl,
   },
-  logoSection: {
-    alignItems: "center",
-    marginBottom: Spacing.xxl,
-  },
+  logoSection: { alignItems: "center", gap: Spacing.sm },
   title: {
-    fontSize: 28,
-    fontWeight: "800",
-    letterSpacing: 2,
-    marginBottom: Spacing.lg,
+    fontSize: 32,
+    fontFamily: Fonts.display,
+    letterSpacing: 1,
+  },
+  subtitle: {
+    fontSize: 16,
+    fontFamily: Fonts.medium,
+    marginTop: Spacing.xs,
   },
   logoCircle: {
-    width: 100,
-    height: 100,
+    width: 88,
+    height: 88,
     borderRadius: BorderRadius.full,
-    borderWidth: 4,
+    borderWidth: 2.5,
     justifyContent: "center",
     alignItems: "center",
+    marginBottom: Spacing.sm,
   },
-  logoText: {
-    fontSize: 36,
-    fontWeight: "700",
-  },
-  inputSection: {
+  logoText: { fontSize: 32, fontFamily: Fonts.display },
+  cardWrap: { width: "100%", maxWidth: Layout.cardMaxWidth },
+  mainCard: {
     width: "100%",
-    maxWidth: 300,
-    marginBottom: Spacing.xl,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.lg,
+    borderRadius: BorderRadius.xl,
   },
-  buttonSection: {
-    width: "100%",
-    maxWidth: 300,
-    gap: Spacing.md,
-  },
-  footer: {
-    marginTop: Spacing.xl,
-    fontSize: 14,
-  },
+  inputSection: { width: "100%", marginBottom: Spacing.md },
+  buttonSection: { width: "100%", gap: Spacing.sm },
 });

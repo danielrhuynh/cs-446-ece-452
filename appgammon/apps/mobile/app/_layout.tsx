@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import {
   DarkTheme,
   DefaultTheme,
@@ -5,22 +6,51 @@ import {
 } from "@react-navigation/native";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import {
+  useFonts,
+  Outfit_400Regular,
+  Outfit_500Medium,
+  Outfit_600SemiBold,
+  Outfit_700Bold,
+} from "@expo-google-fonts/outfit";
+import * as SplashScreen from "expo-splash-screen";
 import "react-native-reanimated";
 
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { Colors } from "@/constants/theme";
+import { Colors, Fonts } from "@/constants/theme";
+
+// Keep the splash screen visible while we fetch resources
+void SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const colorScheme = useColorScheme() ?? "light";
   const colors = Colors[colorScheme];
 
-  // Custom theme with purple header
+  const [fontsLoaded] = useFonts({
+    Outfit_400Regular,
+    Outfit_500Medium,
+    Outfit_600SemiBold,
+    Outfit_700Bold,
+  });
+
+  useEffect(() => {
+    if (fontsLoaded) {
+      SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded]);
+
+  if (!fontsLoaded) {
+    return null;
+  }
+
+  // Custom theme
   const customTheme = {
     ...(colorScheme === "dark" ? DarkTheme : DefaultTheme),
     colors: {
       ...(colorScheme === "dark" ? DarkTheme.colors : DefaultTheme.colors),
       primary: colors.primary,
       card: colors.header,
+      background: 'transparent',
     },
   };
 
@@ -31,10 +61,16 @@ export default function RootLayout() {
           headerStyle: {
             backgroundColor: colors.header,
           },
-          headerTintColor: "#fff",
+          headerTintColor: colors.text,
           headerTitleStyle: {
-            fontWeight: "600",
+            fontFamily: Fonts.semibold,
+            fontSize: 17,
           },
+          headerShadowVisible: false,
+          headerBlurEffect: colorScheme === "dark" ? "dark" : "light",
+          headerTransparent: true,
+          contentStyle: { backgroundColor: "transparent" },
+          animation: "default",
         }}
       >
         <Stack.Screen
@@ -47,8 +83,9 @@ export default function RootLayout() {
           name="create"
           options={{
             title: "Create Game",
-            headerBackVisible: false,
-            gestureEnabled: false,
+            headerBackVisible: true,
+            headerBackTitle: "Home",
+            gestureEnabled: true,
           }}
         />
         <Stack.Screen
@@ -63,6 +100,7 @@ export default function RootLayout() {
           options={{
             headerShown: false,
             gestureEnabled: false,
+            animation: "fade",
           }}
         />
         <Stack.Screen
@@ -71,10 +109,11 @@ export default function RootLayout() {
             title: "",
             headerShown: false,
             gestureEnabled: false,
+            animation: "fade",
           }}
         />
       </Stack>
-      <StatusBar style="auto" />
+      <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
     </ThemeProvider>
   );
 }

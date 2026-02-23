@@ -2,9 +2,19 @@
  * Player card component for lobby screen
  */
 
+import { useEffect } from "react";
 import { View, Text, StyleSheet } from "react-native";
-import { Colors, BorderRadius, Spacing } from "@/constants/theme";
+import { LinearGradient } from "expo-linear-gradient";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from "react-native-reanimated";
+import { Colors, BorderRadius, Fonts, Spacing } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { LiquidGlass } from "@/components/ui/liquid-glass";
 
 interface PlayerCardProps {
   name: string;
@@ -15,6 +25,23 @@ interface PlayerCardProps {
 export function PlayerCard({ name, isHost = false, status }: PlayerCardProps) {
   const colorScheme = useColorScheme() ?? "light";
   const colors = Colors[colorScheme];
+  const textColor = colors.text;
+  const glowX = useSharedValue(-200);
+
+  useEffect(() => {
+    glowX.value = withRepeat(
+      withTiming(400, {
+        duration: 4000,
+        easing: Easing.inOut(Easing.quad),
+      }),
+      -1,
+      true,
+    );
+  }, [glowX]);
+
+  const glowStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: glowX.value }],
+  }));
 
   const getStatusColor = () => {
     switch (status) {
@@ -30,42 +57,78 @@ export function PlayerCard({ name, isHost = false, status }: PlayerCardProps) {
   const getStatusText = () => {
     switch (status) {
       case "ready":
-        return "[ready]";
+        return "Ready";
       case "joined":
-        return "[joined]";
+        return "Joined";
       default:
-        return "[waiting]";
+        return "Waiting";
     }
   };
 
   return (
-    <View
+    <LiquidGlass
       style={[
         styles.container,
         {
-          backgroundColor: getStatusColor(),
           borderColor: getStatusColor(),
         },
       ]}
+      accessibilityLabel={`${name}, ${isHost ? "Host" : "Player"}, ${getStatusText()}`}
     >
+      <Animated.View pointerEvents="none" style={[styles.animatedGlow, glowStyle]}>
+        <LinearGradient
+          colors={["rgba(255,255,255,0)", "rgba(255,255,255,0.12)", "rgba(255,255,255,0)"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.glowGradient}
+        />
+      </Animated.View>
       <View style={styles.nameContainer}>
-        <Text style={styles.name}>{name}</Text>
-        {isHost && <Text style={styles.hostBadge}>(Host)</Text>}
+        <Text style={[styles.name, { color: textColor }]}>{name}</Text>
+        {isHost && (
+          <View
+            style={[
+              styles.hostBadge,
+              {
+                backgroundColor:
+                  colorScheme === "dark"
+                    ? "rgba(255,255,255,0.14)"
+                    : "rgba(28,25,23,0.08)",
+              },
+            ]}
+          >
+            <Text style={[styles.hostBadgeText, { color: textColor }]}>Host</Text>
+          </View>
+        )}
       </View>
-      <Text style={styles.status}>{getStatusText()}</Text>
-    </View>
+      <View style={[styles.statusBadge, { backgroundColor: getStatusColor() }]}>
+        <Text style={styles.statusText}>{getStatusText()}</Text>
+      </View>
+    </LiquidGlass>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    overflow: "hidden",
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingVertical: Spacing.md,
     paddingHorizontal: Spacing.lg,
-    borderRadius: BorderRadius.md,
-    borderWidth: 2,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1.5,
+    minHeight: 56,
+  },
+  animatedGlow: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    width: 200,
+    opacity: 0.6,
+  },
+  glowGradient: {
+    flex: 1,
   },
   nameContainer: {
     flexDirection: "row",
@@ -73,19 +136,26 @@ const styles = StyleSheet.create({
     gap: Spacing.xs,
   },
   name: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#fff",
+    fontSize: 17,
+    fontFamily: Fonts.semibold,
   },
   hostBadge: {
-    fontSize: 14,
-    color: "#fff",
-    opacity: 0.9,
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
-  status: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#fff",
-    opacity: 0.9,
+  hostBadgeText: {
+    fontSize: 13,
+    fontFamily: Fonts.medium,
+  },
+  statusBadge: {
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  statusText: {
+    fontSize: 13,
+    fontFamily: Fonts.semibold,
+    color: Colors.light.onPrimary,
   },
 });

@@ -1,5 +1,6 @@
 /**
- * Custom Input component matching wireframe designs
+ * Custom Input component
+ * Larger touch target and font size for accessibility
  */
 
 import {
@@ -9,8 +10,9 @@ import {
   StyleSheet,
   type TextInputProps,
 } from "react-native";
-import { Colors, BorderRadius, Spacing } from "@/constants/theme";
+import { Colors, BorderRadius, Fonts, Spacing } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { LiquidGlass } from "@/components/ui/liquid-glass";
 
 interface InputProps extends TextInputProps {
   label?: string;
@@ -26,20 +28,34 @@ export function Input({ label, error, style, ...props }: InputProps) {
       {label && (
         <Text style={[styles.label, { color: colors.text }]}>{label}</Text>
       )}
-      <TextInput
+      <LiquidGlass
         style={[
-          styles.input,
+          styles.inputContainer,
           {
-            backgroundColor: colors.inputBackground,
-            borderColor: error ? "#EF4444" : colors.border,
-            color: colors.text,
+            borderColor: error ? colors.error : colors.border,
           },
-          style,
         ]}
-        placeholderTextColor={colors.textMuted}
-        {...props}
-      />
-      {error && <Text style={styles.error}>{error}</Text>}
+      >
+        <TextInput
+          style={[
+            styles.input,
+            {
+              color: colors.text,
+            },
+            style,
+          ]}
+          placeholderTextColor={colors.textMuted}
+          {...props}
+        />
+      </LiquidGlass>
+      {error && (
+        <Text
+          style={[styles.error, { color: colors.error }]}
+          accessibilityLiveRegion="assertive"
+        >
+          {error}
+        </Text>
+      )}
     </View>
   );
 }
@@ -49,21 +65,26 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   label: {
-    fontSize: 14,
-    fontWeight: "500",
-    marginBottom: Spacing.xs,
+    fontSize: 15,
+    fontFamily: Fonts.medium,
+    marginBottom: Spacing.sm,
+  },
+  inputContainer: {
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
   },
   input: {
     width: "100%",
-    paddingVertical: Spacing.md,
+    paddingVertical: 14,
     paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    fontSize: 16,
+    borderRadius: BorderRadius.lg,
+    fontSize: 17,
+    fontFamily: Fonts.sans,
+    minHeight: 50,
   },
   error: {
-    color: "#EF4444",
-    fontSize: 12,
+    fontSize: 14,
+    fontFamily: Fonts.medium,
     marginTop: Spacing.xs,
   },
 });
