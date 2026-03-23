@@ -16,6 +16,7 @@ import {
 import * as SplashScreen from "expo-splash-screen";
 import "react-native-reanimated";
 
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Colors, Fonts } from "@/constants/theme";
 
@@ -55,6 +56,7 @@ export default function RootLayout() {
   };
 
   return (
+    <SafeAreaProvider>
     <ThemeProvider value={customTheme}>
       <Stack
         screenOptions={{
@@ -114,5 +116,6 @@ export default function RootLayout() {
       </Stack>
       <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
     </ThemeProvider>
+    </SafeAreaProvider>
   );
 }

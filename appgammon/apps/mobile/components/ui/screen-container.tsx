@@ -1,4 +1,5 @@
-import { StyleSheet, SafeAreaView, type ViewProps } from "react-native";
+import { StyleSheet, type ViewProps } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Gradients } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";

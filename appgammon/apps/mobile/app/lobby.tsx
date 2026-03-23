@@ -112,7 +112,10 @@ export default function LobbyScreen() {
     }
     if (session && (lastEvent === "game_started" || session.status === "in_game")) {
       navigatedRef.current = true;
-      router.replace({ pathname: "/game", params: { sessionId: session.id } });
+      router.replace({
+        pathname: "/game",
+        params: { sessionId: session.id, isHost: isHostBool ? "true" : "false" },
+      });
     }
   }, [lastEvent, session, router]);
 
