@@ -4,7 +4,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, Modal, Pressable, StyleSheet } from "react-native";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { Colors, BorderRadius, Fonts, Spacing } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -97,35 +97,48 @@ export function EmoteArea({
         </TouchableOpacity>
       )}
 
-      {/* Emote picker strip */}
-      {showPicker && onEmoteSelect && (
-        <Animated.View
-          entering={FadeIn.duration(150)}
-          exiting={FadeOut.duration(150)}
-          style={styles.pickerStrip}
-        >
-          {EMOTES.map((e) => (
-            <TouchableOpacity
-              key={e.id}
-              onPress={() => {
-                onEmoteSelect(e.id);
-                setShowPicker(false);
-              }}
-              activeOpacity={0.7}
-              style={styles.emoteOption}
+      {/* Emote picker modal */}
+      <Modal
+        visible={showPicker && !!onEmoteSelect}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPicker(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setShowPicker(false)}>
+          <Pressable>
+            <LiquidGlass
+              style={[
+                styles.pickerModal,
+                { borderColor: colors.glassBorder },
+              ]}
             >
-              <LiquidGlass
-                style={[
-                  styles.emoteOptionInner,
-                  { borderColor: colors.glassBorder },
-                ]}
-              >
-                <Text style={styles.emoteLabel}>{e.label}</Text>
-              </LiquidGlass>
-            </TouchableOpacity>
-          ))}
-        </Animated.View>
-      )}
+              <Text style={[styles.pickerTitle, { color: colors.text }]}>Send Emote</Text>
+              <View style={styles.pickerGrid}>
+                {EMOTES.map((e) => (
+                  <TouchableOpacity
+                    key={e.id}
+                    onPress={() => {
+                      onEmoteSelect?.(e.id);
+                      setShowPicker(false);
+                    }}
+                    activeOpacity={0.7}
+                    style={styles.emoteOption}
+                  >
+                    <LiquidGlass
+                      style={[
+                        styles.emoteOptionInner,
+                        { borderColor: colors.glassBorder },
+                      ]}
+                    >
+                      <Text style={styles.emoteLabel}>{e.label}</Text>
+                    </LiquidGlass>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </LiquidGlass>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -160,7 +173,25 @@ const styles = StyleSheet.create({
   pickerLabel: {
     fontSize: 22,
   },
-  pickerStrip: {
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  pickerModal: {
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.xl,
+    margin: Spacing.xl,
+    minWidth: 260,
+    alignItems: "center",
+  },
+  pickerTitle: {
+    fontSize: 16,
+    fontFamily: Fonts.bold,
+    marginBottom: Spacing.md,
+  },
+  pickerGrid: {
     flexDirection: "row",
     gap: Spacing.sm,
     flexWrap: "wrap",

@@ -31,7 +31,7 @@ export function BackgammonBoard({ board, onPointPress }: BackgammonBoardProps) {
       const padding = Spacing.lg * 2;
       const boardWidth = Math.min(width - padding, 400);
       const pointWidth = boardWidth / POINTS_PER_ROW;
-      const pointHeight = Math.max(pointWidth * 1.2, 60);
+      const pointHeight = Math.max(pointWidth * 4, 140);
       const boardHeight = pointHeight * 2 + BAR_HEIGHT;
       const checkerSize = Math.min(pointWidth * 0.7, 22);
       return {

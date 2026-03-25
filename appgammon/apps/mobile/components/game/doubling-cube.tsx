@@ -2,7 +2,8 @@
  * Doubling cube display and propose/accept/decline UI.
  */
 
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, Modal, Pressable, TouchableOpacity, StyleSheet } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { Colors, BorderRadius, Fonts, Spacing } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { LiquidGlass } from "@/components/ui/liquid-glass";
@@ -48,27 +49,47 @@ export function DoublingCube({
         </Text>
       </LiquidGlass>
 
-      {pendingProposal && onAcceptDouble && onDeclineDouble && (
-        <View style={styles.proposalActions}>
-          <Text style={[styles.proposalLabel, { color: colors.textMuted }]}>
-            Double?
-          </Text>
-          <View style={styles.buttons}>
-            <Button
-              title="Accept"
-              variant="primary"
-              size="sm"
-              onPress={onAcceptDouble}
-            />
-            <Button
-              title="Decline"
-              variant="outline"
-              size="sm"
-              onPress={onDeclineDouble}
-            />
-          </View>
-        </View>
-      )}
+      {/* Double proposal modal */}
+      <Modal
+        visible={pendingProposal && !!onAcceptDouble && !!onDeclineDouble}
+        transparent
+        animationType="fade"
+        onRequestClose={onDeclineDouble}
+      >
+        <Pressable style={styles.modalOverlay} onPress={onDeclineDouble}>
+          <Pressable>
+            <LiquidGlass
+              style={[
+                styles.proposalModal,
+                { borderColor: colors.glassBorder },
+              ]}
+            >
+              <Text style={[styles.proposalTitle, { color: colors.text }]}>
+                Double to {value * 2}?
+              </Text>
+              <View style={styles.buttons}>
+                <TouchableOpacity activeOpacity={0.7} onPress={onAcceptDouble}>
+                  <LinearGradient
+                    colors={[colors.primary, colors.primaryLight]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.modalBtn}
+                  >
+                    <Text style={[styles.modalBtnText, { color: colors.onPrimary }]}>Accept</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={onDeclineDouble}
+                  style={[styles.modalBtn, styles.modalBtnOutline, { borderColor: colors.primary }]}
+                >
+                  <Text style={[styles.modalBtnText, { color: colors.primary }]}>Decline</Text>
+                </TouchableOpacity>
+              </View>
+            </LiquidGlass>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {!pendingProposal && canPropose && onProposeDouble && value === 1 && (
         <Button
@@ -98,16 +119,39 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontFamily: Fonts.bold,
   },
-  proposalActions: {
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
     alignItems: "center",
-    gap: Spacing.xs,
   },
-  proposalLabel: {
-    fontSize: 12,
-    fontFamily: Fonts.medium,
+  proposalModal: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.lg,
+    borderRadius: BorderRadius.md,
+    gap: Spacing.sm,
+  },
+  proposalTitle: {
+    fontSize: 14,
+    fontFamily: Fonts.bold,
   },
   buttons: {
     flexDirection: "row",
-    gap: Spacing.sm,
+    gap: Spacing.xs,
+  },
+  modalBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: BorderRadius.sm,
+    overflow: "hidden",
+  },
+  modalBtnOutline: {
+    borderWidth: 1,
+  },
+  modalBtnText: {
+    fontSize: 13,
+    fontFamily: Fonts.semibold,
   },
 });

@@ -318,9 +318,8 @@ const styles = StyleSheet.create({
   outer: {
     flex: 1,
     paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
     paddingBottom: Spacing.lg,
-    justifyContent: "space-between",
+    justifyContent: "center",
   },
   content: { gap: Spacing.md, alignItems: "center" },
   wrap: { width: "100%", maxWidth: Layout.contentMaxWidth },
