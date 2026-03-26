@@ -1,3 +1,5 @@
+// ── Session types ──
+
 export enum session_status {
   open = "open",
   closed = "closed",
@@ -21,3 +23,12 @@ export interface SessionWithPlayers {
   player_1: PlayerInfo;
   player_2: PlayerInfo | null;
 }
+
+// ── Game engine ──
+
+export * from "./game-types";
+export * from "./dice";
+export * from "./board";
+export * from "./move-validation";
+export * from "./turn-validation";
+export * from "./win-detection";

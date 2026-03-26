@@ -62,7 +62,7 @@ async function unwrap<T>(res: { ok: boolean; json(): Promise<unknown> }): Promis
 
 // Inferred response types from RPC routes (success-only, errors are thrown)
 export type CreateSessionRes = InferResponseType<typeof client.sessions.create.$post, 200>;
-export type JoinSessionRes = InferResponseType<typeof client.sessions.join.$post, 200>;
+export type JoinSessionRes = InferResponseType<typeof client.sessions[":id"]["join"]["$post"], 200>;
 export type GetSessionRes = InferResponseType<typeof client.sessions[":id"]["$get"], 200>;
 export type StartGameRes = InferResponseType<typeof client.sessions[":id"]["start"]["$post"], 200>;
 export type CancelSessionRes = InferResponseType<typeof client.sessions[":id"]["cancel"]["$post"], 200>;
@@ -75,11 +75,11 @@ export async function createSession(deviceId: string, displayName: string) {
 }
 
 export async function joinSession(deviceId: string, displayName: string, sessionId: string) {
-  const res = await client.sessions.join.$post({
+  const res = await client.sessions[":id"].join.$post({
+    param: { id: sessionId.toUpperCase().replace(/-/g, "") },
     json: {
       device_id: deviceId,
       display_name: displayName,
-      session_id: sessionId.toUpperCase().replace(/-/g, ""),
     },
   });
   return unwrap<JoinSessionRes>(res);

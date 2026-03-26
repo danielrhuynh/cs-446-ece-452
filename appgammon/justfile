@@ -28,6 +28,14 @@ db-generate:
 db-studio:
     pnpm --filter server run db:studio
 
+# Spin up just the server + DB (no mobile app)
+sandbox: db-up db-migrate
+    pnpm --filter server run dev
+
+# Fresh sandbox: wipe DB, re-migrate, start server
+sandbox-fresh: db-reset
+    pnpm --filter server run dev
+
 remote: db-up db-migrate
     bash scripts/remote-dev.sh
 
