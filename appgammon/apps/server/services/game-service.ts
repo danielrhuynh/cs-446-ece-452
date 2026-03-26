@@ -27,7 +27,7 @@ import {
 } from "@appgammon/common";
 import { db } from "../db/client";
 import { series, games, moves, sessions } from "../db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, count } from "drizzle-orm";
 import { logger } from "../utils/logger";
 import { publishGame } from "../utils/game-events";
 
@@ -227,11 +227,10 @@ export async function submitMoves(
   }
 
   // Log moves
-  const moveRows = await db
-    .select({ move_number: moves.move_number })
+  const [{ value: moveCount }] = await db
+    .select({ value: count() })
     .from(moves)
     .where(eq(moves.game_id, gameId));
-  const moveCount = moveRows.length;
 
   for (let i = 0; i < playerMoves.length; i++) {
     await db.insert(moves).values({
@@ -277,7 +276,10 @@ export async function submitMoves(
       .where(eq(games.id, gameId));
 
     // Update series scores
-    const [s] = await db.select().from(series).where(eq(series.id, game.series_id));
+    const [s] = await db
+      .select({ id: series.id, player1_score: series.player1_score, player2_score: series.player2_score, best_of: series.best_of })
+      .from(series)
+      .where(eq(series.id, game.series_id));
     const newP1Score = s.player1_score + (winnerRole === "player1" ? points : 0);
     const newP2Score = s.player2_score + (winnerRole === "player2" ? points : 0);
 

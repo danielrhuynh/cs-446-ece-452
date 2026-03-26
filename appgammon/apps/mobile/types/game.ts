@@ -4,7 +4,9 @@
  * Red home: 0-5, Red outer: 6-11, White outer: 12-17, White home: 18-23
  */
 
-export type PlayerColor = "white" | "red";
+import type { PlayerColor, EmoteId } from "@appgammon/common";
+export type { PlayerColor, EmoteId } from "@appgammon/common";
+export { EMOTES } from "@appgammon/common";
 
 export interface PointState {
   white: number;
@@ -41,8 +43,6 @@ export const INITIAL_BOARD: BoardState = {
   bar: { white: 0, red: 0 },
 };
 
-export type EmoteId = "thumbs_up" | "gg" | "oops" | "thinking" | "nice_move";
-
 export interface LastEmote {
   emoteId: EmoteId;
   fromPlayer: PlayerColor;
@@ -62,25 +62,3 @@ export interface GameState {
   canMove: boolean;
   canProposeDouble: boolean;
 }
-
-export const MOCK_GAME_STATE: GameState = {
-  board: INITIAL_BOARD,
-  currentPlayer: "white",
-  dice: null,
-  doublingCube: 1,
-  doublingCubeOwner: null,
-  pendingDoubleProposal: false,
-  matchScore: { white: 0, red: 0 },
-  matchLength: 3,
-  lastEmote: null,
-  canMove: true,
-  canProposeDouble: true,
-};
-
-export const EMOTES: { id: EmoteId; label: string }[] = [
-  { id: "thumbs_up", label: "👍" },
-  { id: "gg", label: "GG" },
-  { id: "oops", label: "😅" },
-  { id: "thinking", label: "🤔" },
-  { id: "nice_move", label: "🔥" },
-];

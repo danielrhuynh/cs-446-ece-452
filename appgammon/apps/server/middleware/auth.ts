@@ -7,10 +7,10 @@ import { deviceIdInputSchema, sessionIdInputSchema } from "../schemas/session";
 import { getBearerToken, verifySessionToken } from "../utils/auth";
 
 export interface AuthClaims {
-  sub: string;   // player UUID
-  sid: string;   // session ID
-  role: string;  // "host" | "guest"
-  did: string;   // device ID
+  sub: string;
+  sessionId: string;
+  role: string;
+  deviceId: string;
   iat: number;
   exp: number;
 }
@@ -30,7 +30,7 @@ export async function authenticateRequest(
 
   try {
     const claims = await verifySessionToken(token);
-    if (claims.sid !== sessionId || !claims.sub || claims.did !== parsedDeviceId.data) {
+    if (claims.sessionId !== sessionId || !claims.sub || claims.deviceId !== parsedDeviceId.data) {
       return null;
     }
     return claims as AuthClaims;

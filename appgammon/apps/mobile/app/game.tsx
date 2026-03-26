@@ -23,7 +23,7 @@ import { ScreenContainer } from "@/components/ui/screen-container";
 import { BackButton } from "@/components/ui/back-button";
 import { GameUI } from "@/components/game";
 import {
-  MOCK_GAME_STATE,
+  INITIAL_BOARD,
   type GameState,
   type PlayerColor,
   type EmoteId,
@@ -40,7 +40,19 @@ export default function GameScreen() {
 
   const { session, lastEvent } = useSessionEvents(sessionId);
   const navigatedRef = useRef(false);
-  const [gameState, setGameState] = useState<GameState>(MOCK_GAME_STATE);
+  const [gameState, setGameState] = useState<GameState>({
+    board: INITIAL_BOARD,
+    currentPlayer: "white",
+    dice: null,
+    doublingCube: 1,
+    doublingCubeOwner: null,
+    pendingDoubleProposal: false,
+    matchScore: { white: 0, red: 0 },
+    matchLength: 3,
+    lastEmote: null,
+    canMove: true,
+    canProposeDouble: true,
+  });
   const [emotesMuted, setEmotesMuted] = useState(false);
 
   const playerColor: PlayerColor = isHost === "true" ? "white" : "red";

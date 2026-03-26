@@ -3,6 +3,9 @@
  */
 
 import { z } from "zod";
+import { session_status } from "@appgammon/common";
+
+const sessionStatusValues = Object.values(session_status) as [string, ...string[]];
 
 /** Convert a Zod schema to a JSON Schema object for OpenAPI docs. */
 export function jsonSchema(schema: z.ZodType): Record<string, unknown> {
@@ -24,7 +27,7 @@ export const playerInfoSchema = z.object({
 
 export const sessionResponse = z.object({
   id: z.string(),
-  status: z.enum(["open", "closed", "in_game", "cancelled"]),
+  status: z.enum(sessionStatusValues),
   player_1_id: z.string().uuid(),
   player_2_id: z.string().uuid().nullable(),
   created_at: z.string(),
@@ -34,7 +37,7 @@ export const sessionResponse = z.object({
 
 export const sessionWithTokenResponse = z.object({
   id: z.string(),
-  status: z.enum(["open", "closed", "in_game", "cancelled"]),
+  status: z.enum(sessionStatusValues),
   player_1_id: z.string().uuid(),
   player_2_id: z.string().uuid().nullable(),
   created_at: z.string(),

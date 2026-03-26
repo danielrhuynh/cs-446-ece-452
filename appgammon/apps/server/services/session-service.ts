@@ -14,7 +14,7 @@ function isMissingOnConflictConstraintError(error: unknown): boolean {
   );
 }
 
-export async function create_session(player_1_id: string) {
+export async function createSession(player_1_id: string) {
   const [session] = await db
     .insert(sessions)
     .values({
@@ -28,7 +28,7 @@ export async function create_session(player_1_id: string) {
   return session;
 }
 
-export async function join_session(player_2_id: string, session_id: string) {
+export async function joinSession(player_2_id: string, session_id: string) {
   const [session] = await db
     .update(sessions)
     .set({
@@ -54,7 +54,7 @@ export async function join_session(player_2_id: string, session_id: string) {
   return session;
 }
 
-export async function get_session(session_id: string) {
+export async function getSession(session_id: string) {
   // Get session with player details using a join
   const result = await db
     .select({
@@ -107,7 +107,7 @@ export async function get_session(session_id: string) {
   } satisfies SessionWithPlayers;
 }
 
-export async function start_session(session_id: string, host_player_id: string) {
+export async function startSession(session_id: string, host_player_id: string) {
   const [session] = await db
     .update(sessions)
     .set({ status: session_status.in_game })
@@ -129,7 +129,7 @@ export async function start_session(session_id: string, host_player_id: string) 
   return session ?? null;
 }
 
-export async function cancel_session(session_id: string, player_id: string) {
+export async function cancelSession(session_id: string, player_id: string) {
   const [session] = await db
     .update(sessions)
     .set({ status: session_status.cancelled })
@@ -158,7 +158,7 @@ export async function cancel_session(session_id: string, player_id: string) {
   return session ?? null;
 }
 
-export async function get_or_create_player(device_id: string, name: string) {
+export async function getOrCreatePlayer(device_id: string, name: string) {
   try {
     const [player] = await db
       .insert(players)

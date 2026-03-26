@@ -27,6 +27,25 @@ export type DiceUsed = boolean[];
 
 export type PlayerRole = "player1" | "player2";
 
+/**
+ * Turn phase state machine:
+ *
+ *   [turn starts]
+ *       │
+ *       ├─ can double? ──► "waiting_for_roll_or_double"
+ *       │                       │
+ *       │                       ├─ roll ──► "moving"
+ *       │                       └─ propose double ──► "double_proposed"
+ *       │                                                  │
+ *       │                                                  ├─ accept ──► "moving" (cube doubled)
+ *       │                                                  └─ decline ──► "turn_complete" (game forfeited)
+ *       │
+ *       └─ can't double ──► "moving" (dice pre-rolled)
+ *                                │
+ *                                └─ submit moves ──► "turn_complete"
+ *
+ * On game start, the opening roll skips straight to "moving".
+ */
 export type TurnPhase =
   | "waiting_for_roll_or_double"
   | "double_proposed"
@@ -104,27 +123,32 @@ export const INITIAL_BORNE_OFF: BorneOff = { player1: 0, player2: 0 };
 
 export const CHECKERS_PER_PLAYER = 15;
 
-// ── Board format conversion (server ↔ mobile UI) ──
-
-export interface PointState {
-  white: number;
-  red: number;
-}
+// ── Player color mapping ──
 
 /**
- * Convert signed board to the mobile UI's PointState[] format.
- * player1 = "white" (positive), player2 = "red" (negative).
+ * Player role ↔ color mapping:
+ *   player1 = "white" (positive board values), moves 0→23
+ *   player2 = "red"   (negative board values), moves 23→0
  */
-export function signedBoardToPointState(board: Board): PointState[] {
-  return board.map((val) => ({
-    white: val > 0 ? val : 0,
-    red: val < 0 ? -val : 0,
-  }));
+export type PlayerColor = "white" | "red";
+
+export function roleToColor(role: PlayerRole): PlayerColor {
+  return role === "player1" ? "white" : "red";
 }
 
-/**
- * Convert mobile UI's PointState[] back to signed board.
- */
-export function pointStateToSignedBoard(points: PointState[]): Board {
-  return points.map((p) => p.white - p.red);
+export function colorToRole(color: PlayerColor): PlayerRole {
+  return color === "white" ? "player1" : "player2";
 }
+
+// ── Emotes ──
+
+export type EmoteId = "thumbs_up" | "gg" | "oops" | "thinking" | "nice_move";
+
+export const EMOTES: { id: EmoteId; label: string }[] = [
+  { id: "thumbs_up", label: "👍" },
+  { id: "gg", label: "GG" },
+  { id: "oops", label: "😅" },
+  { id: "thinking", label: "🤔" },
+  { id: "nice_move", label: "🔥" },
+];
+

@@ -14,7 +14,7 @@ import {
   sessionWithTokenResponse,
 } from "../schemas/openapi-responses";
 import * as sessionService from "../services/session-service";
-import { get_or_create_player } from "../services/session-service";
+import { getOrCreatePlayer } from "../services/session-service";
 import { signSessionToken } from "../utils/auth";
 import { publish, subscribe } from "../utils/session-events";
 import { authenticateRequest } from "../middleware/auth";
@@ -85,8 +85,8 @@ export const sessionRoutes = new Hono()
     async (c) => {
       const { device_id, display_name } = c.req.valid("json");
 
-      const player = await get_or_create_player(device_id, display_name);
-      const session = await sessionService.create_session(player.id);
+      const player = await getOrCreatePlayer(device_id, display_name);
+      const session = await sessionService.createSession(player.id);
 
       const authToken = await signSessionToken({
         playerId: player.id,
@@ -122,14 +122,14 @@ export const sessionRoutes = new Hono()
       const { device_id, display_name } = c.req.valid("json");
       const session_id = normalizeSessionId(c.req.param("id"));
 
-      const player = await get_or_create_player(device_id, display_name);
-      const session = await sessionService.join_session(player.id, session_id);
+      const player = await getOrCreatePlayer(device_id, display_name);
+      const session = await sessionService.joinSession(player.id, session_id);
 
       if (!session) {
         return c.json({ error: "Failed to join session. It may not exist, be full, or already started." }, 400);
       }
 
-      const fullSession = await sessionService.get_session(session_id);
+      const fullSession = await sessionService.getSession(session_id);
       if (fullSession) {
         publish(session_id, { type: "player_joined", session: fullSession });
       }
@@ -168,7 +168,7 @@ export const sessionRoutes = new Hono()
       return c.json({ error: "Unauthorized" }, 401);
     }
 
-    const session = await sessionService.get_session(sessionId);
+    const session = await sessionService.getSession(sessionId);
 
     if (!session) {
       return c.json({ error: "Session not found" }, 404);
@@ -207,13 +207,13 @@ export const sessionRoutes = new Hono()
       return c.json({ error: "Only the host can start the game" }, 403);
     }
 
-    const updated = await sessionService.start_session(sessionId, claims.sub);
+    const updated = await sessionService.startSession(sessionId, claims.sub);
 
     if (!updated) {
       return c.json({ error: "Cannot start game. Session may not be ready." }, 400);
     }
 
-    const session = await sessionService.get_session(sessionId);
+    const session = await sessionService.getSession(sessionId);
     if (session) {
       publish(sessionId, { type: "game_started", session });
     }
@@ -240,13 +240,13 @@ export const sessionRoutes = new Hono()
       return c.json({ error: "Unauthorized" }, 401);
     }
 
-    const updated = await sessionService.cancel_session(sessionId, claims.sub);
+    const updated = await sessionService.cancelSession(sessionId, claims.sub);
 
     if (!updated) {
       return c.json({ error: "Cannot cancel session." }, 400);
     }
 
-    const session = await sessionService.get_session(sessionId);
+    const session = await sessionService.getSession(sessionId);
     if (session) {
       publish(sessionId, { type: "session_cancelled", session });
     }
@@ -264,7 +264,7 @@ export const sessionSSEController = new Hono()
       return c.json({ error: "Unauthorized" }, 401);
     }
 
-    const session = await sessionService.get_session(sessionId);
+    const session = await sessionService.getSession(sessionId);
     if (!session) {
       return c.json({ error: "Session not found" }, 404);
     }

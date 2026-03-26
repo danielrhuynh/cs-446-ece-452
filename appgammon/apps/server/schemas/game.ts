@@ -3,6 +3,9 @@
  */
 
 import { z } from "zod";
+import { EMOTES } from "@appgammon/common";
+
+const emoteIds = EMOTES.map((e) => e.id) as [string, ...string[]];
 
 export const startSeriesPayloadSchema = z.object({
   best_of: z.union([z.literal(1), z.literal(3), z.literal(5), z.literal(7)]),
@@ -21,10 +24,4 @@ export const submitMovesPayloadSchema = z.object({
 
 export const doubleActionSchema = z.enum(["propose", "accept", "decline"]);
 
-export const emoteIdSchema = z.enum([
-  "thumbs_up",
-  "gg",
-  "oops",
-  "thinking",
-  "nice_move",
-]);
+export const emoteIdSchema = z.enum(emoteIds);

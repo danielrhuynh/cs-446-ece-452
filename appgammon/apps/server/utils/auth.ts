@@ -6,9 +6,9 @@ export type SessionRole = "host" | "guest";
 
 const sessionTokenPayloadSchema = z.object({
   sub: z.string().uuid(),
-  sid: sessionIdValueSchema,
+  sessionId: sessionIdValueSchema,
   role: z.enum(["host", "guest"]),
-  did: deviceIdValueSchema,
+  deviceId: deviceIdValueSchema,
   exp: z.number().int(),
   iat: z.number().int(),
 });
@@ -41,9 +41,9 @@ export async function signSessionToken(input: {
   return sign(
     {
       sub: input.playerId,
-      sid: input.sessionId,
+      sessionId: input.sessionId,
       role: input.role,
-      did: input.deviceId,
+      deviceId: input.deviceId,
       iat: now,
       exp,
     },

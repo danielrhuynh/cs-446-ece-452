@@ -4,7 +4,7 @@
 
 import type { Board, Bar, BorneOff, PlayerRole } from "./game-types";
 import { CHECKERS_PER_PLAYER } from "./game-types";
-import { getSign } from "./board";
+import { getSign, getBarCount } from "./board";
 
 /** Check if a player has borne off all 15 checkers. */
 export function checkWin(borneOff: BorneOff, role: PlayerRole): boolean {
@@ -32,7 +32,7 @@ export function calculateGamePoints(
   if (loserBorneOff > 0) return cubeValue;
 
   // Gammon or Backgammon — loser has 0 borne off
-  const loserBarCount = loserRole === "player1" ? bar.player1 : bar.player2;
+  const loserBarCount = getBarCount(bar, loserRole);
   const loserSign = getSign(loserRole);
 
   // Check if loser has a checker on the bar or in winner's home board
