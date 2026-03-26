@@ -25,5 +25,4 @@ export const createSessionPayloadSchema = z.object({
 export const joinSessionPayloadSchema = z.object({
   device_id: deviceIdInputSchema,
   display_name: displayNameInputSchema,
-  session_id: sessionIdInputSchema,
 });

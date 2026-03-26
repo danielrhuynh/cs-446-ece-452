@@ -1,21 +1,23 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { sValidator } from "@hono/standard-validator";
+import { describeRoute } from "hono-openapi";
 import {
   createSessionPayloadSchema,
-  deviceIdInputSchema,
   joinSessionPayloadSchema,
   normalizeSessionId,
-  sessionIdInputSchema,
 } from "../schemas/session";
+import {
+  jsonSchema,
+  errorResponse,
+  sessionResponse,
+  sessionWithTokenResponse,
+} from "../schemas/openapi-responses";
 import * as sessionService from "../services/session-service";
 import { get_or_create_player } from "../services/session-service";
-import {
-  getBearerToken,
-  signSessionToken,
-  verifySessionToken,
-} from "../utils/auth";
+import { signSessionToken } from "../utils/auth";
 import { publish, subscribe } from "../utils/session-events";
+import { authenticateRequest } from "../middleware/auth";
 
 type KeepAliveStream = {
   aborted: boolean;
@@ -54,29 +56,6 @@ export async function runSSEKeepaliveLoop(
   }
 }
 
-/** Verify auth headers and return claims, or null on failure. */
-async function authenticateRequest(c: {
-  req: { header: (name: string) => string | undefined };
-}, sessionId: string) {
-  const token = getBearerToken(c.req.header("Authorization"));
-  const deviceIdHeader = c.req.header("X-Device-Id") ?? "";
-  const parsedDeviceId = deviceIdInputSchema.safeParse(deviceIdHeader);
-
-  if (!sessionIdInputSchema.safeParse(sessionId).success || !token || !parsedDeviceId.success) {
-    return null;
-  }
-
-  try {
-    const claims = await verifySessionToken(token);
-    if (claims.sid !== sessionId || !claims.sub || claims.did !== parsedDeviceId.data) {
-      return null;
-    }
-    return claims;
-  } catch {
-    return null;
-  }
-}
-
 const validationHook = (
   result: { success: boolean },
   c: { json: (data: { error: string }, status: 400) => Response },
@@ -89,6 +68,19 @@ const validationHook = (
 export const sessionRoutes = new Hono()
   .post(
     "/create",
+    describeRoute({
+      tags: ["Sessions"],
+      summary: "Create a new game session",
+      description: "Creates a session and returns the session ID with an auth token for the host.",
+      requestBody: {
+        required: true,
+        content: { "application/json": { schema: jsonSchema(createSessionPayloadSchema) } },
+      },
+      responses: {
+        200: { description: "Session created", content: { "application/json": { schema: jsonSchema(sessionWithTokenResponse) } } },
+        400: { description: "Validation error", content: { "application/json": { schema: jsonSchema(errorResponse) } } },
+      },
+    }),
     sValidator("json", createSessionPayloadSchema, validationHook),
     async (c) => {
       const { device_id, display_name } = c.req.valid("json");
@@ -111,10 +103,24 @@ export const sessionRoutes = new Hono()
     },
   )
   .post(
-    "/join",
+    "/:id/join",
+    describeRoute({
+      tags: ["Sessions"],
+      summary: "Join an existing session",
+      description: "Joins a session by code (path param). Returns the session with an auth token for the guest.",
+      requestBody: {
+        required: true,
+        content: { "application/json": { schema: jsonSchema(joinSessionPayloadSchema) } },
+      },
+      responses: {
+        200: { description: "Joined session", content: { "application/json": { schema: jsonSchema(sessionWithTokenResponse) } } },
+        400: { description: "Session not found or full", content: { "application/json": { schema: jsonSchema(errorResponse) } } },
+      },
+    }),
     sValidator("json", joinSessionPayloadSchema, validationHook),
     async (c) => {
-      const { device_id, display_name, session_id } = c.req.valid("json");
+      const { device_id, display_name } = c.req.valid("json");
+      const session_id = normalizeSessionId(c.req.param("id"));
 
       const player = await get_or_create_player(device_id, display_name);
       const session = await sessionService.join_session(player.id, session_id);
@@ -142,7 +148,19 @@ export const sessionRoutes = new Hono()
       });
     },
   )
-  .get("/:id", async (c) => {
+  .get(
+    "/:id",
+    describeRoute({
+      tags: ["Sessions"],
+      summary: "Get session details",
+      description: "Returns the current session state including both players. Requires auth.",
+      responses: {
+        200: { description: "Session details", content: { "application/json": { schema: jsonSchema(sessionResponse) } } },
+        401: { description: "Unauthorized", content: { "application/json": { schema: jsonSchema(errorResponse) } } },
+        404: { description: "Session not found", content: { "application/json": { schema: jsonSchema(errorResponse) } } },
+      },
+    }),
+    async (c) => {
     const sessionId = normalizeSessionId(c.req.param("id"));
     const claims = await authenticateRequest(c, sessionId);
 
@@ -165,7 +183,19 @@ export const sessionRoutes = new Hono()
 
     return c.json(session);
   })
-  .post("/:id/start", async (c) => {
+  .post(
+    "/:id/start",
+    describeRoute({
+      tags: ["Sessions"],
+      summary: "Start the game",
+      description: "Host-only. Transitions session from 'closed' to 'in_game'.",
+      responses: {
+        200: { description: "Game started", content: { "application/json": { schema: jsonSchema(sessionResponse) } } },
+        401: { description: "Unauthorized", content: { "application/json": { schema: jsonSchema(errorResponse) } } },
+        403: { description: "Not the host", content: { "application/json": { schema: jsonSchema(errorResponse) } } },
+      },
+    }),
+    async (c) => {
     const sessionId = normalizeSessionId(c.req.param("id"));
     const claims = await authenticateRequest(c, sessionId);
 
@@ -190,7 +220,19 @@ export const sessionRoutes = new Hono()
 
     return c.json(session!);
   })
-  .post("/:id/cancel", async (c) => {
+  .post(
+    "/:id/cancel",
+    describeRoute({
+      tags: ["Sessions"],
+      summary: "Cancel the session",
+      description: "Cancels the session. Both players are notified via SSE.",
+      responses: {
+        200: { description: "Session cancelled", content: { "application/json": { schema: jsonSchema(sessionResponse) } } },
+        401: { description: "Unauthorized", content: { "application/json": { schema: jsonSchema(errorResponse) } } },
+        400: { description: "Cannot cancel", content: { "application/json": { schema: jsonSchema(errorResponse) } } },
+      },
+    }),
+    async (c) => {
     const sessionId = normalizeSessionId(c.req.param("id"));
     const claims = await authenticateRequest(c, sessionId);
 
