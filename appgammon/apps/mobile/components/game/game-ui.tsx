@@ -41,8 +41,8 @@ export function GameUI({
   const colorScheme = useColorScheme() ?? "light";
   const colors = Colors[colorScheme];
 
-  const whiteName = playerColor === "white" ? "You" : player2Name;
-  const redName = playerColor === "red" ? "You" : player1Name;
+  const whiteName = playerColor === "white" ? "You" : player1Name;
+  const redName = playerColor === "red" ? "You" : player2Name;
 
   return (
     <View style={styles.container}>
@@ -50,15 +50,21 @@ export function GameUI({
       <View style={styles.scoreRow}>
         <View style={styles.scoreItem}>
           <View style={[styles.checkerDot, { backgroundColor: "#FAF7F2" }]} />
-          <Text style={[styles.scoreLabel, { color: colors.text }]}>{whiteName}</Text>
+          <Text style={[styles.scoreLabel, { color: colors.text }]}>
+            {whiteName}
+          </Text>
           <Text style={[styles.scoreValue, { color: colors.primary }]}>
             {gameState.matchScore.white}
           </Text>
         </View>
-        <Text style={[styles.scoreDivider, { color: colors.textMuted }]}>–</Text>
+        <Text style={[styles.scoreDivider, { color: colors.textMuted }]}>
+          –
+        </Text>
         <View style={styles.scoreItem}>
           <View style={[styles.checkerDot, { backgroundColor: "#8B0000" }]} />
-          <Text style={[styles.scoreLabel, { color: colors.text }]}>{redName}</Text>
+          <Text style={[styles.scoreLabel, { color: colors.text }]}>
+            {redName}
+          </Text>
           <Text style={[styles.scoreValue, { color: colors.accent }]}>
             {gameState.matchScore.red}
           </Text>
@@ -66,7 +72,7 @@ export function GameUI({
       </View>
 
       {/* Board */}
-      <BackgammonBoard board={gameState.board} onPointPress={onPointPress} />
+      <BackgammonBoard board={gameState.board} playerColor={playerColor} onPointPress={onPointPress} />
 
       {/* Controls row: dice + doubling cube + emotes */}
       <View style={styles.controlsRow}>

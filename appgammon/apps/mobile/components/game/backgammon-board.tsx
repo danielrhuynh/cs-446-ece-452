@@ -1,6 +1,7 @@
 /**
  * Main backgammon board with 24 points and center bar.
- * White (top): home 19-24, outer 13-18. Red (bottom): home 1-6, outer 7-12.
+ * Renders from the perspective of the given playerColor so the
+ * player's home board is always at the bottom-right.
  */
 
 import { useMemo } from "react";
@@ -11,17 +12,22 @@ import { Colors, Spacing } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Point } from "./point";
 import { Bar } from "./bar";
-import type { BoardState } from "@/types/game";
+import type { BoardState, PlayerColor } from "@/types/game";
 
 interface BackgammonBoardProps {
   board: BoardState;
+  playerColor: PlayerColor;
   onPointPress?: (pointIndex: number) => void;
 }
 
 const POINTS_PER_ROW = 12;
 const BAR_HEIGHT = 32;
 
-export function BackgammonBoard({ board, onPointPress }: BackgammonBoardProps) {
+export function BackgammonBoard({
+  board,
+  playerColor,
+  onPointPress,
+}: BackgammonBoardProps) {
   const { width } = useWindowDimensions();
   const colorScheme = useColorScheme() ?? "light";
   const colors = Colors[colorScheme];
@@ -43,10 +49,16 @@ export function BackgammonBoard({ board, onPointPress }: BackgammonBoardProps) {
       };
     }, [width]);
 
-  // Top row: points 13-24 (indices 12-23), displayed right-to-left so 13 is left
-  const topPoints = Array.from({ length: POINTS_PER_ROW }, (_, i) => 12 + i).reverse();
-  // Bottom row: points 1-12 (indices 0-11), displayed left-to-right
-  const bottomPoints = Array.from({ length: POINTS_PER_ROW }, (_, i) => i);
+  // White perspective: top 13→24, bottom 12→1 (home bottom-right)
+  // Red perspective:   top 12→1,  bottom 13→24 (home bottom-right)
+  const topPoints =
+    playerColor === "white"
+      ? Array.from({ length: POINTS_PER_ROW }, (_, i) => 12 + i)
+      : Array.from({ length: POINTS_PER_ROW }, (_, i) => i).reverse();
+  const bottomPoints =
+    playerColor === "white"
+      ? Array.from({ length: POINTS_PER_ROW }, (_, i) => i).reverse()
+      : Array.from({ length: POINTS_PER_ROW }, (_, i) => 12 + i);
 
   return (
     <View style={styles.wrapper}>
@@ -68,7 +80,9 @@ export function BackgammonBoard({ board, onPointPress }: BackgammonBoardProps) {
               width={pointWidth}
               height={pointHeight}
               checkerSize={checkerSize}
-              onPress={onPointPress ? () => onPointPress(pointIndex) : undefined}
+              onPress={
+                onPointPress ? () => onPointPress(pointIndex) : undefined
+              }
             />
           ))}
         </View>
@@ -93,7 +107,9 @@ export function BackgammonBoard({ board, onPointPress }: BackgammonBoardProps) {
               width={pointWidth}
               height={pointHeight}
               checkerSize={checkerSize}
-              onPress={onPointPress ? () => onPointPress(pointIndex) : undefined}
+              onPress={
+                onPointPress ? () => onPointPress(pointIndex) : undefined
+              }
             />
           ))}
         </View>
