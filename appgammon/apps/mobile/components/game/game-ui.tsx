@@ -9,6 +9,7 @@ import { BackgammonBoard } from "./backgammon-board";
 import { DiceDisplay } from "./dice-display";
 import { DoublingCube } from "./doubling-cube";
 import { EmoteArea } from "./emote-area";
+import { Button } from "@/components/ui/button";
 import type { GameState, PlayerColor, EmoteId } from "@/types/game";
 
 interface GameUIProps {
@@ -17,6 +18,9 @@ interface GameUIProps {
   player1Name?: string;
   player2Name?: string;
   onPointPress?: (pointIndex: number) => void;
+  onRollDice?: () => void;
+  onSubmitMoves?: () => void;
+  canSubmitMoves?: boolean;
   onEmoteSelect?: (emoteId: EmoteId) => void;
   onProposeDouble?: () => void;
   onAcceptDouble?: () => void;
@@ -31,6 +35,9 @@ export function GameUI({
   player1Name = "Player 1",
   player2Name = "Player 2",
   onPointPress,
+  onRollDice,
+  onSubmitMoves,
+  canSubmitMoves = false,
   onEmoteSelect,
   onProposeDouble,
   onAcceptDouble,
@@ -77,7 +84,11 @@ export function GameUI({
       {/* Controls row: dice + doubling cube + emotes */}
       <View style={styles.controlsRow}>
         <View style={styles.controlsSection}>
-          <DiceDisplay dice={gameState.dice} />
+          <DiceDisplay
+            dice={gameState.dice}
+            canRoll={gameState.canRoll}
+            onRoll={onRollDice}
+          />
         </View>
         <View style={styles.controlsSection}>
           <DoublingCube
@@ -100,6 +111,13 @@ export function GameUI({
           />
         </View>
       </View>
+
+      {/* Submit moves */}
+      {canSubmitMoves && onSubmitMoves && (
+        <View style={styles.submitRow}>
+          <Button title="Submit Moves" variant="primary" size="md" onPress={onSubmitMoves} />
+        </View>
+      )}
 
       {/* Turn indicator */}
       <Text style={[styles.turnIndicator, { color: colors.textMuted }]}>
@@ -158,6 +176,10 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+  },
+  submitRow: {
+    alignItems: "center",
+    paddingVertical: Spacing.sm,
   },
   turnIndicator: {
     fontSize: 14,
