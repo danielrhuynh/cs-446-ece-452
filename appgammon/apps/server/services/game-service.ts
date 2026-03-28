@@ -334,26 +334,49 @@ export async function submitMoves(
 
   let nextTurnPhase: string = canDouble ? "waiting_for_roll_or_double" : "moving";
 
-  // Check if opponent has legal moves (only matters if going to "moving")
+  // Skip opponent if they have no legal moves
   if (nextTurnPhase === "moving" && !hasAnyLegalMove(result.newBoard, result.newBar, result.newBorneOff, newDice, newDiceUsed, opRole)) {
-    logger.info({ gameId, opponentId }, "[GAME] Opponent has no legal moves, auto-passing");
+    logger.info({ gameId, opponentId }, "[GAME] Skipping opponent, no legal moves");
     const passDice = rollDice();
     const passDiceUsed = initializeDiceUsed(passDice);
+    const myRole = getPlayerRole(playerId, sessionPlayers.player1Id);
 
-    await db
-      .update(games)
-      .set({
-        board: result.newBoard,
-        bar: result.newBar,
-        borne_off: result.newBorneOff,
-        current_turn: playerId,
-        turn_phase: "moving",
-        dice: passDice,
-        dice_used: passDiceUsed,
-        version: game.version + 1,
-        updated_at: new Date(),
-      })
-      .where(eq(games.id, gameId));
+    // Current player also stuck, re-roll for opponent
+    if (!hasAnyLegalMove(result.newBoard, result.newBar, result.newBorneOff, passDice, passDiceUsed, myRole)) {
+      logger.info({ gameId }, "[GAME] Neither player can move, re-rolling");
+      const opDice = rollDice();
+      const opDiceUsed = initializeDiceUsed(opDice);
+
+      await db
+        .update(games)
+        .set({
+          board: result.newBoard,
+          bar: result.newBar,
+          borne_off: result.newBorneOff,
+          current_turn: opponentId,
+          turn_phase: "moving",
+          dice: opDice,
+          dice_used: opDiceUsed,
+          version: game.version + 1,
+          updated_at: new Date(),
+        })
+        .where(eq(games.id, gameId));
+    } else {
+      await db
+        .update(games)
+        .set({
+          board: result.newBoard,
+          bar: result.newBar,
+          borne_off: result.newBorneOff,
+          current_turn: playerId,
+          turn_phase: "moving",
+          dice: passDice,
+          dice_used: passDiceUsed,
+          version: game.version + 1,
+          updated_at: new Date(),
+        })
+        .where(eq(games.id, gameId));
+    }
   } else {
     await db
       .update(games)
@@ -546,11 +569,62 @@ export async function rollForTurn(
     return { success: false, error: "Cannot roll in this phase", status: 400 };
   }
 
-  // Dice were pre-rolled; just advance phase to moving
-  await db
-    .update(games)
-    .set({ turn_phase: "moving", version: game.version + 1, updated_at: new Date() })
-    .where(eq(games.id, gameId));
+  const sessionPlayers = await getSessionPlayers(sessionId);
+  if (!sessionPlayers) return { success: false, error: "Session not found", status: 404 };
+
+  const role = getPlayerRole(playerId, sessionPlayers.player1Id);
+  const board = game.board as Board;
+  const bar = game.bar as Bar;
+  const borneOff = game.borne_off as BorneOff;
+  const dice = game.dice as Dice;
+  const diceUsed = game.dice_used as DiceUsed;
+
+  if (!hasAnyLegalMove(board, bar, borneOff, dice, diceUsed, role)) {
+    logger.info({ gameId, playerId }, "[GAME] Skipping turn, no legal moves");
+    const opponentId = getOpponentId(playerId, sessionPlayers.player1Id, sessionPlayers.player2Id);
+    const opRole = getPlayerRole(opponentId, sessionPlayers.player1Id);
+    const newDice = rollDice();
+    const newDiceUsed = initializeDiceUsed(newDice);
+
+    const canDouble =
+      game.doubling_cube < 64 &&
+      (game.cube_owner === null || game.cube_owner === opponentId);
+    const nextTurnPhase = canDouble ? "waiting_for_roll_or_double" : "moving";
+
+    // Opponent also stuck, re-roll for current player
+    if (nextTurnPhase === "moving" && !hasAnyLegalMove(board, bar, borneOff, newDice, newDiceUsed, opRole)) {
+      logger.info({ gameId }, "[GAME] Neither player can move, re-rolling");
+      const passDice = rollDice();
+      const passDiceUsed = initializeDiceUsed(passDice);
+      await db
+        .update(games)
+        .set({
+          turn_phase: "moving",
+          dice: passDice,
+          dice_used: passDiceUsed,
+          version: game.version + 1,
+          updated_at: new Date(),
+        })
+        .where(eq(games.id, gameId));
+    } else {
+      await db
+        .update(games)
+        .set({
+          current_turn: opponentId,
+          turn_phase: nextTurnPhase,
+          dice: newDice,
+          dice_used: newDiceUsed,
+          version: game.version + 1,
+          updated_at: new Date(),
+        })
+        .where(eq(games.id, gameId));
+    }
+  } else {
+    await db
+      .update(games)
+      .set({ turn_phase: "moving", version: game.version + 1, updated_at: new Date() })
+      .where(eq(games.id, gameId));
+  }
 
   const updatedState = await getSeriesState(sessionId);
   if (updatedState) {
