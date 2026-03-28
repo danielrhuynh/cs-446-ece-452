@@ -60,5 +60,6 @@ export interface GameState {
   matchLength: 3 | 5 | 7;
   lastEmote: LastEmote | null;
   canMove: boolean;
+  canRoll: boolean;
   canProposeDouble: boolean;
 }
