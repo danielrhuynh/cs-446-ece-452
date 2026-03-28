@@ -91,7 +91,7 @@ export function DoublingCube({
         </Pressable>
       </Modal>
 
-      {!pendingProposal && canPropose && onProposeDouble && value === 1 && (
+      {!pendingProposal && canPropose && onProposeDouble && (
         <Button
           title="Double"
           variant="secondary"
