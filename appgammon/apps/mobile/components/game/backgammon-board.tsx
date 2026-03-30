@@ -12,12 +12,14 @@ import { Colors, Spacing } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Point } from "./point";
 import { Bar } from "./bar";
+import { BearOffTray } from "./bear-off-tray";
 import type { BoardState, PlayerColor } from "@/types/game";
 
 interface BackgammonBoardProps {
   board: BoardState;
   playerColor: PlayerColor;
   onPointPress?: (pointIndex: number) => void;
+  selectedPoint?: number | null;
 }
 
 const POINTS_PER_ROW = 12;
@@ -27,6 +29,7 @@ export function BackgammonBoard({
   board,
   playerColor,
   onPointPress,
+  selectedPoint,
 }: BackgammonBoardProps) {
   const { width } = useWindowDimensions();
   const colorScheme = useColorScheme() ?? "light";
@@ -60,60 +63,77 @@ export function BackgammonBoard({
       ? Array.from({ length: POINTS_PER_ROW }, (_, i) => i).reverse()
       : Array.from({ length: POINTS_PER_ROW }, (_, i) => 12 + i);
 
+  const trayHeight = pointHeight * 2 + BAR_HEIGHT;
+
   return (
     <View style={styles.wrapper}>
-      <LinearGradient
-        colors={[colors.primary, colors.primaryLight]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[styles.board, { width: boardWidth, borderRadius: 12 }]}
-      >
-        {/* Top row: points 13-24, triangles point down */}
-        <View style={[styles.row, { height: pointHeight }]}>
-          {topPoints.map((pointIndex, i) => (
-            <Point
-              key={`top-${pointIndex}`}
-              pointIndex={pointIndex}
-              pointState={board.points[pointIndex]}
-              isLight={i % 2 === 0}
-              direction="down"
-              width={pointWidth}
-              height={pointHeight}
-              checkerSize={checkerSize}
-              onPress={
-                onPointPress ? () => onPointPress(pointIndex) : undefined
-              }
-            />
-          ))}
-        </View>
+      <View style={styles.boardRow}>
+        <LinearGradient
+          colors={[colors.primary, colors.primaryLight]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.board, { width: boardWidth, borderRadius: 12 }]}
+        >
+          {/* Top row: points 13-24, triangles point down */}
+          <View style={[styles.row, { height: pointHeight }]}>
+            {topPoints.map((pointIndex, i) => (
+              <Point
+                key={`top-${pointIndex}`}
+                pointIndex={pointIndex}
+                pointState={board.points[pointIndex]}
+                isLight={i % 2 === 0}
+                direction="down"
+                width={pointWidth}
+                height={pointHeight}
+                checkerSize={checkerSize}
+                selected={selectedPoint === pointIndex}
+                onPress={
+                  onPointPress ? () => onPointPress(pointIndex) : undefined
+                }
+              />
+            ))}
+          </View>
 
-        {/* Bar */}
-        <Bar
-          bar={board.bar}
-          width={boardWidth}
-          height={BAR_HEIGHT}
+          {/* Bar */}
+          <Bar
+            bar={board.bar}
+            width={boardWidth}
+            height={BAR_HEIGHT}
+            checkerSize={checkerSize}
+            onPress={onPointPress}
+            selectedPoint={selectedPoint}
+          />
+
+          {/* Bottom row: points 1-12, triangles point up */}
+          <View style={[styles.row, { height: pointHeight }]}>
+            {bottomPoints.map((pointIndex, i) => (
+              <Point
+                key={`bottom-${pointIndex}`}
+                pointIndex={pointIndex}
+                pointState={board.points[pointIndex]}
+                isLight={i % 2 === 1}
+                direction="up"
+                width={pointWidth}
+                height={pointHeight}
+                checkerSize={checkerSize}
+                selected={selectedPoint === pointIndex}
+                onPress={
+                  onPointPress ? () => onPointPress(pointIndex) : undefined
+                }
+              />
+            ))}
+          </View>
+        </LinearGradient>
+
+        {/* Bear-off tray */}
+        <BearOffTray
+          borneOff={board.borneOff}
+          playerColor={playerColor}
           checkerSize={checkerSize}
+          height={trayHeight}
+          onPress={onPointPress}
         />
-
-        {/* Bottom row: points 1-12, triangles point up */}
-        <View style={[styles.row, { height: pointHeight }]}>
-          {bottomPoints.map((pointIndex, i) => (
-            <Point
-              key={`bottom-${pointIndex}`}
-              pointIndex={pointIndex}
-              pointState={board.points[pointIndex]}
-              isLight={i % 2 === 1}
-              direction="up"
-              width={pointWidth}
-              height={pointHeight}
-              checkerSize={checkerSize}
-              onPress={
-                onPointPress ? () => onPointPress(pointIndex) : undefined
-              }
-            />
-          ))}
-        </View>
-      </LinearGradient>
+      </View>
     </View>
   );
 }
@@ -122,6 +142,11 @@ const styles = StyleSheet.create({
   wrapper: {
     alignItems: "center",
     padding: Spacing.sm,
+  },
+  boardRow: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    gap: Spacing.xs,
   },
   board: {
     overflow: "hidden",

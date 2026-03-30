@@ -18,9 +18,15 @@ export interface BarState {
   red: number;
 }
 
+export interface BorneOffState {
+  white: number;
+  red: number;
+}
+
 export interface BoardState {
   points: PointState[];
   bar: BarState;
+  borneOff: BorneOffState;
 }
 
 /** Initial board config per proposal 2.2.a */
@@ -41,6 +47,7 @@ export const INITIAL_BOARD: BoardState = {
     }
   ),
   bar: { white: 0, red: 0 },
+  borneOff: { white: 0, red: 0 },
 };
 
 export interface LastEmote {
@@ -60,5 +67,6 @@ export interface GameState {
   matchLength: 3 | 5 | 7;
   lastEmote: LastEmote | null;
   canMove: boolean;
+  canRoll: boolean;
   canProposeDouble: boolean;
 }

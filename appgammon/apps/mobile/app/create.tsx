@@ -133,7 +133,12 @@ export default function CreateSessionScreen() {
       navigatedRef.current = true;
       router.replace({
         pathname: "/lobby",
-        params: { sessionId: latestSession.id, displayName, isHost: "true" },
+        params: {
+          sessionId: latestSession.id,
+          displayName,
+          isHost: "true",
+          bestOf: String(bestOf),
+        },
       });
     }
   }, [sseEvent, session, sseSession, displayName, router]);

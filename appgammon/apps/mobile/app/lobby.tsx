@@ -27,7 +27,7 @@ import Animated, {
 import { Colors, Fonts, Spacing, BorderRadius, Layout, Shadows } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useSessionEvents } from "@/hooks/use-session-events";
-import { cancelSession, startGame } from "@/lib/api";
+import { cancelSession, startGame, startSeries, syncGame } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { LiquidGlass } from "@/components/ui/liquid-glass";
 import { ScreenContainer } from "@/components/ui/screen-container";
@@ -88,10 +88,11 @@ const STATUS_LABELS: Record<string, string> = {
 /* ── Main screen ── */
 export default function LobbyScreen() {
   const router = useRouter();
-  const { sessionId, isHost, displayName } = useLocalSearchParams<{
+  const { sessionId, isHost, displayName, bestOf } = useLocalSearchParams<{
     sessionId: string;
     isHost: string;
     displayName: string;
+    bestOf?: string;
   }>();
   const colorScheme = useColorScheme() ?? "light";
   const colors = Colors[colorScheme];
@@ -99,8 +100,20 @@ export default function LobbyScreen() {
 
   const { session, lastEvent } = useSessionEvents(sessionId);
   const [isStarting, setIsStarting] = useState(false);
-  const [score] = useState({ player1: 0, player2: 0 });
+  const [score, setScore] = useState({ player1: 0, player2: 0 });
   const navigatedRef = useRef(false);
+
+  // Fetch series scores if a series exists (e.g. returning between games)
+  useEffect(() => {
+    if (!sessionId) return;
+    void syncGame(sessionId)
+      .then((state) => {
+        if (state) {
+          setScore({ player1: state.player1Score, player2: state.player2Score });
+        }
+      })
+      .catch(() => { /* no active series yet — scores stay 0-0 */ });
+  }, [sessionId]);
 
   /* ── SSE navigation ── */
   useEffect(() => {
@@ -139,16 +152,23 @@ export default function LobbyScreen() {
     ]);
   }, [doLeave]);
 
+  const bestOfNum = Number(bestOf) || 3;
+
   const handleStartGame = useCallback(async () => {
     if (!session?.player_2 || !sessionId) {
       Alert.alert("Cannot Start", "Waiting for an opponent to join.");
       return;
     }
     setIsStarting(true);
-    try { await startGame(sessionId); }
-    catch (err) { Alert.alert("Error", err instanceof Error ? err.message : "Failed to start game"); }
-    finally { setIsStarting(false); }
-  }, [session, sessionId]);
+    try {
+      await startSeries(sessionId, bestOfNum);
+      await startGame(sessionId);
+    } catch (err) {
+      Alert.alert("Error", err instanceof Error ? err.message : "Failed to start game");
+    } finally {
+      setIsStarting(false);
+    }
+  }, [session, sessionId, bestOfNum]);
 
   const opponentJoined = session?.player_2 != null;
   const statusText = session ? (STATUS_LABELS[session.status] ?? session.status) : "";

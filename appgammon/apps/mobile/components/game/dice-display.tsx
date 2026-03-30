@@ -4,7 +4,7 @@
  */
 
 import { useEffect } from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -17,6 +17,8 @@ import { LiquidGlass } from "@/components/ui/liquid-glass";
 
 interface DiceDisplayProps {
   dice: [number, number] | null;
+  canRoll?: boolean;
+  onRoll?: () => void;
 }
 
 const PIP_POSITIONS: Record<number, { row: number; col: number }[]> = {
@@ -116,25 +118,31 @@ function SingleDie({ value, size = 44 }: { value: number; size?: number }) {
   );
 }
 
-export function DiceDisplay({ dice }: DiceDisplayProps) {
+export function DiceDisplay({ dice, canRoll, onRoll }: DiceDisplayProps) {
   const colorScheme = useColorScheme() ?? "light";
   const colors = Colors[colorScheme];
 
   if (!dice) {
+    const Wrapper = canRoll && onRoll ? TouchableOpacity : View;
+    const wrapperProps = canRoll && onRoll
+      ? { onPress: onRoll, activeOpacity: 0.7, accessibilityLabel: "Roll dice", accessibilityRole: "button" as const }
+      : {};
     return (
       <View style={styles.container}>
-        <LiquidGlass
-          style={[
-            styles.placeholder,
-            {
-              borderColor: colors.glassBorder,
-            },
-          ]}
-        >
-          <Text style={[styles.placeholderText, { color: colors.textMuted }]}>
-            Roll
-          </Text>
-        </LiquidGlass>
+        <Wrapper {...wrapperProps}>
+          <LiquidGlass
+            style={[
+              styles.placeholder,
+              {
+                borderColor: canRoll ? colors.primary : colors.glassBorder,
+              },
+            ]}
+          >
+            <Text style={[styles.placeholderText, { color: canRoll ? colors.primary : colors.textMuted }]}>
+              Roll
+            </Text>
+          </LiquidGlass>
+        </Wrapper>
       </View>
     );
   }
