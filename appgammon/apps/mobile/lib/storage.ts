@@ -10,6 +10,7 @@ const STORAGE_KEYS = {
   DISPLAY_NAME: "@appgammon/display_name",
   DEVICE_ID: "@appgammon/device_id",
   AUTH_TOKEN: "appgammon_auth_token",
+  HAS_SEEN_TUTORIAL: "@appgammon/has_seen_tutorial",
 } as const;
 
 /**
@@ -121,6 +122,26 @@ export async function clearAuthToken(): Promise<void> {
     await AsyncStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
   } catch {
     // Best-effort clear
+  }
+}
+
+export async function getHasSeenTutorial(): Promise<boolean> {
+  try {
+    const value = await AsyncStorage.getItem(STORAGE_KEYS.HAS_SEEN_TUTORIAL);
+    return value === "true";
+  } catch {
+    return false;
+  }
+}
+
+export async function setHasSeenTutorial(hasSeen: boolean): Promise<void> {
+  try {
+    await AsyncStorage.setItem(
+      STORAGE_KEYS.HAS_SEEN_TUTORIAL,
+      hasSeen ? "true" : "false",
+    );
+  } catch {
+    console.error("Failed to persist tutorial status");
   }
 }
 

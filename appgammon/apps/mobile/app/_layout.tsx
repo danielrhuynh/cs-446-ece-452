@@ -97,6 +97,14 @@ export default function RootLayout() {
           }}
         />
         <Stack.Screen
+          name="tutorial"
+          options={{
+            title: "Backgammon Tutorial",
+            headerShown: false,
+            animation: "slide_from_right",
+          }}
+        />
+        <Stack.Screen
           name="lobby"
           options={{
             headerShown: false,
