@@ -182,6 +182,64 @@ describe("combined dice moves", () => {
   });
 });
 
+describe("overshoot bear-off", () => {
+  // All player1 checkers in home board (18-23), can bear off
+  function bearOffBoard(): Board {
+    const board: Board = new Array(24).fill(0);
+    board[19] = 3; // 5 away from bearing off
+    board[20] = 4; // 4 away
+    board[22] = 5; // 2 away
+    board[23] = 3; // 1 away
+    return board;
+  }
+
+  it("validates overshoot bear-off (die 6, checker 5 away)", () => {
+    const board = bearOffBoard();
+    const dice: Dice = [6, 3];
+    const diceUsed = initializeDiceUsed(dice);
+
+    // Bear off from point 19 (5 away) with die 6 (overshoot)
+    // and from point 20 (4 away) with die 3... wait, die 3 moves to 23, not off
+    // Use die 3 to move 20→23, die 6 to bear off 19
+    const moves: Move[] = [
+      { from: 19, to: 24 }, // overshoot bear-off with die 6
+      { from: 20, to: 23 }, // normal move with die 3
+    ];
+    const result = validateTurn(board, INITIAL_BAR, INITIAL_BORNE_OFF, dice, diceUsed, moves, "player1");
+    expect(result.valid).toBe(true);
+  });
+
+  it("rejects overshoot bear-off when higher checker exists", () => {
+    const board: Board = new Array(24).fill(0);
+    board[18] = 1; // furthest checker (6 away)
+    board[20] = 3; // 4 away
+    board[23] = 3; // 1 away
+    const dice: Dice = [6, 3];
+    const diceUsed = initializeDiceUsed(dice);
+
+    // Try to bear off point 20 with die 6 (overshoot) but point 18 has a checker further back
+    const moves: Move[] = [
+      { from: 20, to: 24 },
+      { from: 23, to: 24 },
+    ];
+    const result = validateTurn(board, INITIAL_BAR, INITIAL_BORNE_OFF, dice, diceUsed, moves, "player1");
+    expect(result.valid).toBe(false);
+  });
+
+  it("exact bear-off still works", () => {
+    const board = bearOffBoard();
+    const dice: Dice = [5, 2];
+    const diceUsed = initializeDiceUsed(dice);
+
+    const moves: Move[] = [
+      { from: 19, to: 24 }, // exact bear-off with die 5
+      { from: 22, to: 24 }, // exact bear-off with die 2
+    ];
+    const result = validateTurn(board, INITIAL_BAR, INITIAL_BORNE_OFF, dice, diceUsed, moves, "player1");
+    expect(result.valid).toBe(true);
+  });
+});
+
 describe("auto-skip turn (no legal moves)", () => {
   it("detects no legal moves when bar entry is fully blocked", () => {
     const board: Board = new Array(24).fill(0);

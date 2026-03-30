@@ -36,44 +36,42 @@ export function validateTurn(
   let curBar = bar;
   let curBorneOff = borneOff;
   let curDiceUsed = [...diceUsed];
+  const matchedDice: number[] = [];
 
   // Apply each move sequentially
   for (let i = 0; i < moves.length; i++) {
     const move = moves[i];
-    const dieValue = getDieValueForMove(move, role);
     const available = getAvailableDice(dice, curDiceUsed);
 
-    if (!available.includes(dieValue)) {
+    // Find which available die allows this move (handles overshoot bear-offs)
+    let matchedDie: number | null = null;
+    for (const die of [...new Set(available)]) {
+      const validMoves = getValidMoves(curBoard, curBar, curBorneOff, role, die);
+      if (validMoves.some((m) => m.from === move.from && m.to === move.to)) {
+        matchedDie = die;
+        break;
+      }
+    }
+
+    if (matchedDie === null) {
       return {
         valid: false,
         newBoard: curBoard,
         newBar: curBar,
         newBorneOff: curBorneOff,
         newDiceUsed: curDiceUsed,
-        error: `Move ${i + 1}: no available die with value ${dieValue}`,
+        error: `Move ${i + 1}: no available die for ${move.from} → ${move.to}`,
       };
     }
 
-    // Check move is legal on current board state
-    const validMoves = getValidMoves(curBoard, curBar, curBorneOff, role, dieValue);
-    const isLegal = validMoves.some((m) => m.from === move.from && m.to === move.to);
-    if (!isLegal) {
-      return {
-        valid: false,
-        newBoard: curBoard,
-        newBar: curBar,
-        newBorneOff: curBorneOff,
-        newDiceUsed: curDiceUsed,
-        error: `Move ${i + 1}: illegal move ${move.from} → ${move.to} with die ${dieValue}`,
-      };
-    }
+    matchedDice.push(matchedDie);
 
     // Apply the move
     const result = applyMove(curBoard, curBar, curBorneOff, move, role);
     curBoard = result.board;
     curBar = result.bar;
     curBorneOff = result.borneOff;
-    curDiceUsed = markDieUsed(dice, curDiceUsed, dieValue);
+    curDiceUsed = markDieUsed(dice, curDiceUsed, matchedDie);
   }
 
   // Check must-use-maximum-dice rule
@@ -81,66 +79,22 @@ export function validateTurn(
   const usedCount = moves.length;
 
   if (usedCount < maxUsable) {
-    // Special case: if both dice can be used individually but not together,
-    // and only one can be used, must use the larger one
-    if (maxUsable === 1 && usedCount === 1) {
-      // This is fine — they used one die
-      // But check if they used the larger one when only one is usable
-      const isDoubles = dice[0] === dice[1];
-      if (!isDoubles) {
-        const canUseDie0 = getValidMoves(board, bar, borneOff, role, dice[0]).length > 0;
-        const canUseDie1 = getValidMoves(board, bar, borneOff, role, dice[1]).length > 0;
-        if (canUseDie0 && canUseDie1) {
-          // Both individual dice have moves, but can't use both (maxUsable would be 2)
-          // This shouldn't happen if maxUsable is 1, so we're fine
-        } else if (canUseDie0 && !canUseDie1) {
-          const usedDie = getDieValueForMove(moves[0], role);
-          if (usedDie !== dice[0]) {
-            return {
-              valid: false,
-              newBoard: curBoard,
-              newBar: curBar,
-              newBorneOff: curBorneOff,
-              newDiceUsed: curDiceUsed,
-              error: "Must use the available die",
-            };
-          }
-        } else if (!canUseDie0 && canUseDie1) {
-          const usedDie = getDieValueForMove(moves[0], role);
-          if (usedDie !== dice[1]) {
-            return {
-              valid: false,
-              newBoard: curBoard,
-              newBar: curBar,
-              newBorneOff: curBorneOff,
-              newDiceUsed: curDiceUsed,
-              error: "Must use the available die",
-            };
-          }
-        }
-      }
-    } else {
-      return {
-        valid: false,
-        newBoard: curBoard,
-        newBar: curBar,
-        newBorneOff: curBorneOff,
-        newDiceUsed: curDiceUsed,
-        error: `Must use ${maxUsable} dice but only used ${usedCount}`,
-      };
-    }
+    return {
+      valid: false,
+      newBoard: curBoard,
+      newBar: curBar,
+      newBorneOff: curBorneOff,
+      newDiceUsed: curDiceUsed,
+      error: `Must use ${maxUsable} dice but only used ${usedCount}`,
+    };
   }
 
-  // Additional rule: when both dice can individually be used (but not both together),
-  // must use the larger die
-  if (!dice[0] || !dice[1]) {
-    // shouldn't happen
-  } else if (dice[0] !== dice[1] && maxUsable === 1 && usedCount === 1) {
+  // When only one die can be used and both are individually usable, must use the larger one
+  if (dice[0] && dice[1] && dice[0] !== dice[1] && maxUsable === 1 && usedCount === 1) {
     const canUseLarger = canUseSpecificDie(board, bar, borneOff, dice, diceUsed, role, Math.max(dice[0], dice[1]));
     const canUseSmaller = canUseSpecificDie(board, bar, borneOff, dice, diceUsed, role, Math.min(dice[0], dice[1]));
     if (canUseLarger && canUseSmaller) {
-      const usedDie = getDieValueForMove(moves[0], role);
-      if (usedDie !== Math.max(dice[0], dice[1])) {
+      if (matchedDice[0] !== Math.max(dice[0], dice[1])) {
         return {
           valid: false,
           newBoard: curBoard,

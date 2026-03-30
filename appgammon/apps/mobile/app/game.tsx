@@ -308,10 +308,8 @@ export default function GameScreen() {
       setPendingMoves([]);
       setSelectedFrom(null);
     } catch (err) {
-      if (err instanceof Error && err.message.includes("Version mismatch")) {
-        setPendingMoves([]);
-        setSelectedFrom(null);
-      }
+      setPendingMoves([]);
+      setSelectedFrom(null);
       Alert.alert("Error", err instanceof Error ? err.message : "Failed to submit moves");
     }
   }, [sessionId, serverGame, pendingMoves]);
