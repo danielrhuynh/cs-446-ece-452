@@ -18,6 +18,7 @@ interface GameUIProps {
   player1Name?: string;
   player2Name?: string;
   onPointPress?: (pointIndex: number) => void;
+  selectedPoint?: number | null;
   onRollDice?: () => void;
   onSubmitMoves?: () => void;
   canSubmitMoves?: boolean;
@@ -35,6 +36,7 @@ export function GameUI({
   player1Name = "Player 1",
   player2Name = "Player 2",
   onPointPress,
+  selectedPoint,
   onRollDice,
   onSubmitMoves,
   canSubmitMoves = false,
@@ -79,7 +81,7 @@ export function GameUI({
       </View>
 
       {/* Board */}
-      <BackgammonBoard board={gameState.board} playerColor={playerColor} onPointPress={onPointPress} />
+      <BackgammonBoard board={gameState.board} playerColor={playerColor} onPointPress={onPointPress} selectedPoint={selectedPoint} />
 
       {/* Controls row: dice + doubling cube + emotes */}
       <View style={styles.controlsRow}>

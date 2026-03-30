@@ -80,6 +80,10 @@ export function mapServerToUIGameState(
         white: game.bar.player1,
         red: game.bar.player2,
       },
+      borneOff: {
+        white: game.borneOff.player1,
+        red: game.borneOff.player2,
+      },
     },
     currentPlayer,
     dice: waitingForRoll ? null : game.dice,

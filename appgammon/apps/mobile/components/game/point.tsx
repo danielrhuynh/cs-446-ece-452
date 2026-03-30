@@ -18,6 +18,7 @@ interface PointProps {
   width: number;
   height: number;
   checkerSize: number;
+  selected?: boolean;
   onPress?: () => void;
 }
 
@@ -29,6 +30,7 @@ export function Point({
   width,
   height,
   checkerSize,
+  selected = false,
   onPress,
 }: PointProps) {
   const colorScheme = useColorScheme() ?? "light";
@@ -47,6 +49,9 @@ export function Point({
       <Svg width={width} height={height} style={styles.triangle}>
         <Polygon points={points} fill={fillColor} stroke={colors.border} strokeWidth={0.5} />
       </Svg>
+      {selected && (
+        <View style={[styles.selectedOverlay, { width, height, borderRadius: 4, backgroundColor: "rgba(255, 215, 0, 0.3)", borderColor: "rgba(255, 215, 0, 0.7)" }]} />
+      )}
       <View
         style={[
           styles.checkersContainer,
@@ -127,5 +132,11 @@ const styles = StyleSheet.create({
   overflowText: {
     fontSize: 10,
     fontFamily: Fonts.semibold,
+  },
+  selectedOverlay: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    borderWidth: 2,
   },
 });

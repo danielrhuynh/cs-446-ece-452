@@ -153,6 +153,10 @@ export default function GameScreen() {
           white: workingState.bar.player1,
           red: workingState.bar.player2,
         },
+        borneOff: {
+          white: workingState.borneOff.player1,
+          red: workingState.borneOff.player2,
+        },
       };
     }
 
@@ -245,23 +249,52 @@ export default function GameScreen() {
           setSelectedFrom(pointIndex);
         }
       } else {
-        // Try to make a move from selectedFrom to pointIndex
+        // Try each available die to see if it allows this move
+        // (handles exact moves and overshoot bear-offs)
         const move: Move = { from: selectedFrom, to: pointIndex };
-        const dieValue = getDieValueForMove(move, myRole);
-        const isAvailable = available.includes(dieValue);
-
-        if (isAvailable) {
+        for (const die of [...new Set(available)]) {
           const validMoves = getValidMoves(
-            workingState.board, workingState.bar, workingState.borneOff, myRole, dieValue,
+            workingState.board, workingState.bar, workingState.borneOff, myRole, die,
           );
-          const isValid = validMoves.some((m) => m.from === move.from && m.to === move.to);
-          if (isValid) {
+          if (validMoves.some((m) => m.from === move.from && m.to === move.to)) {
             setPendingMoves((prev) => [...prev, move]);
             setSelectedFrom(null);
             return;
           }
         }
-        // Invalid destination — deselect
+
+        // Try combined dice (e.g., tap 5 away with dice [2, 3])
+        if (available.length >= 2) {
+          const uniqueDice = [...new Set(available)];
+          for (const die1 of uniqueDice) {
+            const firstMoves = getValidMoves(
+              workingState.board, workingState.bar, workingState.borneOff, myRole, die1,
+            );
+            for (const firstMove of firstMoves) {
+              if (firstMove.from !== selectedFrom) continue;
+              const after = applyMove(
+                workingState.board, workingState.bar, workingState.borneOff, firstMove, myRole,
+              );
+              const updatedDiceUsed = markDieUsed(dice, workingState.diceUsed, die1);
+              const remaining = getAvailableDice(dice, updatedDiceUsed);
+              for (const die2 of [...new Set(remaining)]) {
+                const secondMoves = getValidMoves(
+                  after.board, after.bar, after.borneOff, myRole, die2,
+                );
+                const secondMove = secondMoves.find(
+                  (m) => m.from === firstMove.to && m.to === pointIndex,
+                );
+                if (secondMove) {
+                  setPendingMoves((prev) => [...prev, firstMove, secondMove]);
+                  setSelectedFrom(null);
+                  return;
+                }
+              }
+            }
+          }
+        }
+
+        // No valid single or combined move — deselect
         setSelectedFrom(null);
       }
     },
@@ -359,6 +392,7 @@ export default function GameScreen() {
             player1Name={session.player_1?.name ?? undefined}
             player2Name={session.player_2?.name ?? undefined}
             onPointPress={handlePointPress}
+            selectedPoint={selectedFrom}
             onRollDice={handleRollDice}
             onSubmitMoves={handleSubmitMoves}
             canSubmitMoves={canSubmitMoves}
