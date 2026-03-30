@@ -15,7 +15,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { Colors, Fonts, Spacing, BorderRadius, Layout, Shadows } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { getDisplayName, setDisplayName } from "@/lib/storage";
+import { getDisplayName, getHasSeenTutorial, setDisplayName } from "@/lib/storage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LiquidGlass } from "@/components/ui/liquid-glass";
@@ -29,14 +29,23 @@ export default function HomeScreen() {
 
   const [displayNameValue, setDisplayNameValue] = useState("");
   const [error, setError] = useState("");
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    async function loadDisplayName() {
+    async function loadHomeData() {
       const savedName = await getDisplayName();
       if (savedName) setDisplayNameValue(savedName);
+
+      const hasSeenTutorial = await getHasSeenTutorial();
+      if (!hasSeenTutorial) {
+        router.replace("/tutorial" as never);
+        return;
+      }
+
+      setIsReady(true);
     }
-    loadDisplayName();
-  }, []);
+    void loadHomeData();
+  }, [router]);
 
   const validate = () => {
     if (!displayNameValue.trim()) {
@@ -61,6 +70,14 @@ export default function HomeScreen() {
       params: { displayName: displayNameValue.trim(), sessionCode: pendingSessionCode },
     });
   };
+
+  if (!isReady) {
+    return (
+      <ScreenContainer>
+        <View style={styles.loadingState} />
+      </ScreenContainer>
+    );
+  }
 
   return (
     <ScreenContainer>
@@ -131,6 +148,17 @@ export default function HomeScreen() {
                   accessibilityLabel="Join an existing game"
                   accessibilityHint="Enter a code from a friend to join their game"
                 />
+                <Button
+                  title="Replay tutorial"
+                  variant="ghost"
+                  size="md"
+                  fullWidth
+                  onPress={() =>
+                    router.push({ pathname: "/tutorial" as never, params: { source: "home" } })
+                  }
+                  accessibilityLabel="Open the backgammon tutorial again"
+                  accessibilityHint="Shows rules and scoring on a separate screen"
+                />
               </View>
             </LiquidGlass>
           </Animated.View>
@@ -180,4 +208,5 @@ const styles = StyleSheet.create({
   },
   inputSection: { width: "100%", marginBottom: Spacing.md },
   buttonSection: { width: "100%", gap: Spacing.sm },
+  loadingState: { flex: 1 },
 });
