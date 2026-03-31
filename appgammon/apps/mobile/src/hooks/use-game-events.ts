@@ -35,8 +35,6 @@ export function useGameEvents(sessionId: string | undefined) {
   const [gameOverInfo, setGameOverInfo] = useState<GameOverInfo | null>(null);
   const [seriesCompleteInfo, setSeriesCompleteInfo] = useState<SeriesCompleteInfo | null>(null);
 
-  const clearDoubleProposal = useCallback(() => setDoubleProposal(null), []);
-
   const resetState = useCallback(() => {
     setSeriesState(null);
     setLastEvent(null);
@@ -83,14 +81,7 @@ export function useGameEvents(sessionId: string | undefined) {
   }, []);
 
   const isRetryableError = useCallback(
-    (error: SSEConnectionError | undefined, rawError: unknown) =>
-      error?.status === 404 ||
-      (typeof rawError === "object" &&
-      rawError !== null &&
-      "retryable" in rawError &&
-      typeof error?.retryable === "boolean"
-        ? error.retryable
-        : true),
+    (error: SSEConnectionError | undefined) => error?.status === 404 || error?.retryable !== false,
     [],
   );
 
@@ -107,7 +98,6 @@ export function useGameEvents(sessionId: string | undefined) {
     seriesState,
     lastEvent,
     doubleProposal,
-    clearDoubleProposal,
     lastEmote,
     gameOverInfo,
     seriesCompleteInfo,

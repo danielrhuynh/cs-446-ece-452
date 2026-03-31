@@ -102,7 +102,7 @@ describe("game state helpers", () => {
     expect(result.dice).toEqual([6, 6]);
   });
 
-  it("falls back to the opponent when both players are blocked", () => {
+  it("falls back to an opponent pre-roll when both players are blocked", () => {
     const board: Board = Array.from({ length: 24 }, () => 0);
     board[0] = -2;
     board[23] = 2;
@@ -125,7 +125,7 @@ describe("game state helpers", () => {
     });
 
     expect(result.currentTurn).toBe("player-2");
-    expect(result.turnPhase).toBe("moving");
+    expect(result.turnPhase).toBe("waiting_for_roll_or_double");
     expect(result.dice).toEqual(fallbackRoll);
   });
 });

@@ -1,6 +1,4 @@
-/**
- * Doubling cube display and propose/accept/decline UI.
- */
+/** Doubling cube UI. */
 
 import { View, Text, Modal, Pressable, TouchableOpacity, StyleSheet } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";

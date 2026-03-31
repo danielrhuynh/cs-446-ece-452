@@ -1,6 +1,4 @@
-/**
- * Composes the full backgammon game UI: board, dice, doubling cube, emotes.
- */
+/** Game UI. */
 
 import { View, Text, StyleSheet } from "react-native";
 import { Colors, Fonts, Spacing } from "@/constants/theme";
@@ -55,7 +53,7 @@ export function GameUI({
 
   return (
     <View style={styles.container}>
-      {/* Score display */}
+      {/* Score */}
       <View style={styles.scoreRow}>
         <View style={styles.scoreItem}>
           <View style={[styles.checkerDot, { backgroundColor: "#FAF7F2" }]} />
@@ -82,7 +80,7 @@ export function GameUI({
         selectedPoint={selectedPoint}
       />
 
-      {/* Controls row: dice + doubling cube + emotes */}
+      {/* Controls */}
       <View style={styles.controlsRow}>
         <View style={styles.controlsSection}>
           <DiceDisplay dice={gameState.dice} canRoll={gameState.canRoll} onRoll={onRollDice} />

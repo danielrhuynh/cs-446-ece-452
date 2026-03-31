@@ -10,15 +10,17 @@ export interface SSEEvent {
 export interface SSEConnectionError extends Error {
   status?: number;
   retryable: boolean;
+  kind: "network" | "http" | "closed";
 }
 
 function createSSEError(
   message: string,
-  options: { status?: number; retryable: boolean },
+  options: { status?: number; retryable: boolean; kind: SSEConnectionError["kind"] },
 ): SSEConnectionError {
   const error = new Error(message) as SSEConnectionError;
   error.status = options.status;
   error.retryable = options.retryable;
+  error.kind = options.kind;
   return error;
 }
 
@@ -81,14 +83,14 @@ export function connectSSE(
   };
 
   xhr.onerror = () => {
-    emitError(createSSEError("SSE connection error", { retryable: true }));
+    emitError(createSSEError("SSE connection error", { retryable: true, kind: "network" }));
   };
 
   xhr.onreadystatechange = () => {
     if (xhr.readyState !== XMLHttpRequest.DONE || aborted || ended) return;
 
     if (xhr.status >= 200 && xhr.status < 300) {
-      emitError(createSSEError("SSE connection closed", { retryable: true }));
+      emitError(createSSEError("SSE connection closed", { retryable: true, kind: "closed" }));
       return;
     }
 
@@ -98,6 +100,7 @@ export function connectSSE(
       createSSEError(`SSE request failed with status ${status}`, {
         status,
         retryable,
+        kind: "http",
       }),
     );
   };

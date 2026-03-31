@@ -1,7 +1,4 @@
-/**
- * Emote display (2s fade) and emote picker.
- * Clash Royale-style: emotes shown briefly, optional mute.
- */
+/** Emote display and picker. */
 
 import { useEffect, useState } from "react";
 import { View, Text, TouchableOpacity, Modal, Pressable, StyleSheet } from "react-native";
@@ -40,7 +37,7 @@ export function EmoteArea({ lastEmote, emotesMuted, onEmoteSelect, onMuteToggle 
 
   return (
     <View style={styles.container}>
-      {/* Emote display - 2s then fade */}
+      {/* Emote display */}
       {showEmote && lastEmote && !emotesMuted && emote && (
         <Animated.View
           entering={FadeIn.duration(150)}

@@ -16,7 +16,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Colors, Fonts } from "@/constants/theme";
 
-// Keep the splash screen visible while we fetch resources
+// Keep the splash screen visible until fonts load.
 void SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
@@ -40,7 +40,7 @@ export default function RootLayout() {
     return null;
   }
 
-  // Custom theme
+  // Navigation theme.
   const customTheme = {
     ...(colorScheme === "dark" ? DarkTheme : DefaultTheme),
     colors: {

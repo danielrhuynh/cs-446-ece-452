@@ -9,8 +9,8 @@ interface UseSSEStreamOptions {
   logPrefix: string;
   resetState: () => void;
   onEvent: (event: SSEEvent) => void;
-  onTerminalError?: () => void;
-  isRetryableError?: (error: SSEConnectionError | undefined, rawError: unknown) => boolean;
+  onTerminalError?: (error: SSEConnectionError) => void;
+  isRetryableError?: (error: SSEConnectionError | undefined) => boolean;
 }
 
 export function useSSEStream({
@@ -71,7 +71,12 @@ export function useSSEStream({
         missingAuthAttemptsRef.current += 1;
         if (missingAuthAttemptsRef.current >= 3) {
           console.log(`[${logPrefix}] Missing auth token; giving up`);
-          onTerminalError?.();
+          onTerminalError?.({
+            retryable: false,
+            kind: "http",
+            name: "Error",
+            message: "Missing auth token",
+          });
           return;
         }
         scheduleReconnect();
@@ -103,20 +108,22 @@ export function useSSEStream({
 
           const sseError = error as SSEConnectionError | undefined;
           const retryable = isRetryableError
-            ? isRetryableError(sseError, error)
-            : typeof error === "object" &&
-                error !== null &&
-                "retryable" in error &&
-                typeof sseError?.retryable === "boolean"
-              ? sseError.retryable
-              : true;
+            ? isRetryableError(sseError)
+            : (sseError?.retryable ?? true);
 
           if (retryable) {
             scheduleReconnect();
             return;
           }
 
-          onTerminalError?.();
+          onTerminalError?.(
+            sseError ?? {
+              retryable: false,
+              kind: "http",
+              name: "Error",
+              message: "Terminal SSE error",
+            },
+          );
         },
       );
     }

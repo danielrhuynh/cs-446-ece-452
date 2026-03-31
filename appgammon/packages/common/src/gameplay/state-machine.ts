@@ -147,7 +147,7 @@ export function advanceTurnState(input: {
   const fallbackRoll = input.fallbackOpponentRoll ?? input.opponentRoll;
   return {
     currentTurn: input.opponentId,
-    turnPhase: "moving",
+    turnPhase: "waiting_for_roll_or_double",
     dice: fallbackRoll,
     diceUsed: initializeDiceUsed(fallbackRoll),
   };

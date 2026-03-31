@@ -4,9 +4,9 @@ import type { GameState } from "@appgammon/common";
 const mocks = vi.hoisted(() => ({
   rollDice: vi.fn(),
   hasAnyLegalMove: vi.fn(),
+  advanceTurnState: vi.fn(),
   repo: {
-    getGame: vi.fn(),
-    getSessionPlayers: vi.fn(),
+    getGameInSession: vi.fn(),
     updateGame: vi.fn(),
     getActiveSeries: vi.fn(),
     getActiveGame: vi.fn(),
@@ -21,6 +21,7 @@ vi.mock("@appgammon/common", async () => {
     ...actual,
     hasAnyLegalMove: mocks.hasAnyLegalMove,
     rollDice: mocks.rollDice,
+    advanceTurnState: mocks.advanceTurnState,
   };
 });
 
@@ -52,7 +53,7 @@ describe("rollForTurn", () => {
     mocks.repo.getActiveSeries.mockResolvedValue(null);
   });
 
-  it("re-rolls for the original player when their dead pre-roll and the opponent roll are both blocked", async () => {
+  it("falls back to the opponent pre-roll when both players are blocked", async () => {
     const game: GameState = {
       id: "game-1",
       seriesId: "series-1",
@@ -73,24 +74,43 @@ describe("rollForTurn", () => {
     game.board[0] = -2;
     game.board[23] = 2;
 
-    mocks.repo.getGame.mockResolvedValue(game);
-    mocks.repo.getSessionPlayers.mockResolvedValue({
+    mocks.repo.getGameInSession.mockResolvedValue({
+      game,
       player1Id: "player-1",
       player2Id: "player-2",
     });
-    mocks.hasAnyLegalMove
-      .mockReturnValueOnce(false)
-      .mockReturnValueOnce(false)
-      .mockReturnValueOnce(true);
-    mocks.rollDice.mockReturnValueOnce([2, 2]).mockReturnValueOnce([5, 6]);
+    mocks.hasAnyLegalMove.mockReturnValueOnce(false);
+    mocks.rollDice
+      .mockReturnValueOnce([2, 2])
+      .mockReturnValueOnce([5, 6])
+      .mockReturnValueOnce([4, 1]);
+    mocks.advanceTurnState.mockReturnValue({
+      currentTurn: "player-2",
+      turnPhase: "waiting_for_roll_or_double",
+      dice: [4, 1],
+      diceUsed: [false, false],
+    });
 
     const result = await rollForTurn("game-1", "player-1", "session-1");
 
     expect(result).toEqual({ success: true });
+    expect(mocks.advanceTurnState).toHaveBeenCalledWith({
+      board: game.board,
+      bar: game.bar,
+      borneOff: game.borneOff,
+      player1Id: "player-1",
+      currentPlayerId: "player-1",
+      opponentId: "player-2",
+      doublingCube: 64,
+      cubeOwner: "player-1",
+      opponentRoll: [2, 2],
+      currentPlayerRoll: [5, 6],
+      fallbackOpponentRoll: [4, 1],
+    });
     expect(mocks.repo.updateGame).toHaveBeenCalledWith("game-1", {
-      currentTurn: "player-1",
-      turnPhase: "moving",
-      dice: [5, 6],
+      currentTurn: "player-2",
+      turnPhase: "waiting_for_roll_or_double",
+      dice: [4, 1],
       diceUsed: [false, false],
       version: 8,
     });

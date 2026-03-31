@@ -2,7 +2,9 @@ import type { Move, GameState, SeriesState } from "@appgammon/common";
 import type { PersistableGameState } from "@appgammon/common";
 import { db } from "../db/client";
 import { games, moves, series, sessions } from "../db/schema";
-import { and, count, eq } from "drizzle-orm";
+import { and, count, desc, eq } from "drizzle-orm";
+
+/** Handles game and series persistence plus row-to-domain mapping. */
 
 export interface SessionPlayers {
   player1Id: string;
@@ -19,9 +21,15 @@ export interface SeriesRecord {
   winnerId: string | null;
 }
 
+export interface SessionGameContext {
+  game: GameState;
+  player1Id: string;
+  player2Id: string;
+}
+
 export interface GameRepository {
   getSessionPlayers(sessionId: string): Promise<SessionPlayers | null>;
-  getGame(gameId: string): Promise<GameState | null>;
+  getGameInSession(sessionId: string, gameId: string): Promise<SessionGameContext | null>;
   getActiveGame(seriesId: string): Promise<GameState | null>;
   createGame(state: PersistableGameState): Promise<GameState>;
   updateGame(gameId: string, patch: Partial<Omit<PersistableGameState, "seriesId">>): Promise<void>;
@@ -83,9 +91,25 @@ export const drizzleGameRepository: GameRepository = {
     return { player1Id: session.player_1_id, player2Id: session.player_2_id };
   },
 
-  async getGame(gameId) {
-    const [game] = await db.select().from(games).where(eq(games.id, gameId));
-    return game ? gameRowToState(game) : null;
+  async getGameInSession(sessionId, gameId) {
+    const [result] = await db
+      .select({
+        game: games,
+        player1Id: sessions.player_1_id,
+        player2Id: sessions.player_2_id,
+      })
+      .from(games)
+      .innerJoin(series, eq(games.series_id, series.id))
+      .innerJoin(sessions, eq(series.session_id, sessions.id))
+      .where(and(eq(games.id, gameId), eq(series.session_id, sessionId)));
+
+    if (!result || !result.player2Id) return null;
+
+    return {
+      game: gameRowToState(result.game),
+      player1Id: result.player1Id,
+      player2Id: result.player2Id,
+    };
   },
 
   async getActiveGame(seriesId) {
@@ -93,6 +117,7 @@ export const drizzleGameRepository: GameRepository = {
       .select()
       .from(games)
       .where(and(eq(games.series_id, seriesId), eq(games.status, "in_progress")))
+      .orderBy(desc(games.created_at))
       .limit(1);
 
     return game ? gameRowToState(game) : null;
@@ -165,6 +190,7 @@ export const drizzleGameRepository: GameRepository = {
       .select()
       .from(series)
       .where(and(eq(series.session_id, sessionId), eq(series.status, "active")))
+      .orderBy(desc(series.created_at))
       .limit(1);
 
     return value ? seriesRowToRecord(value) : null;

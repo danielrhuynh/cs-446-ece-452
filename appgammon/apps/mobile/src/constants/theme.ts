@@ -1,7 +1,4 @@
-/**
- * Theme constants for Appgammon
- * "Heritage Game Room" — warm greens & ambers inspired by backgammon boards
- */
+/** Theme constants for Appgammon. */
 
 import { Platform } from "react-native";
 
@@ -11,23 +8,23 @@ export const Colors = {
     textMuted: "#57534E",
     background: "#FAF7F2",
     icon: "#78716C",
-    // Primary: forest green (backgammon felt)
+    // Primary green for actions and emphasis.
     primary: "#2D6A4F",
     primaryLight: "#40916C",
-    // Secondary: warm amber (wooden frame / pieces)
+    // Secondary amber for accents.
     secondary: "#C4813D",
     secondaryLight: "#D4A373",
-    // Accent & status
+    // Accent and status colors.
     accent: "#E76F51",
     error: "#C1121F",
     onPrimary: "#FFFFFF",
     border: "rgba(28,25,23,0.14)",
     inputBackground: "rgba(255,255,255,0.75)",
     cardBackground: "rgba(255,255,255,0.85)",
-    // Status colors
+    // Status colors.
     hostBadge: "#2D6A4F",
     joinedBadge: "#C4813D",
-    // Header & glass
+    // Header and glass colors.
     header: "rgba(250,247,242,0.82)",
     glassBorder: "rgba(255,252,245,0.55)",
     glassBackground: "rgba(255,252,245,0.38)",
@@ -38,23 +35,23 @@ export const Colors = {
     textMuted: "#A8A29E",
     background: "#1C1917",
     icon: "#A8A29E",
-    // Primary: lighter green for dark mode
+    // Primary green for dark mode.
     primary: "#52B788",
     primaryLight: "#74C69D",
-    // Secondary: warm gold
+    // Secondary amber for dark mode.
     secondary: "#E6B17E",
     secondaryLight: "#F0C89E",
-    // Accent & status
+    // Accent and status colors.
     accent: "#F4845F",
     error: "#F87171",
     onPrimary: "#FFFFFF",
     border: "rgba(250,247,242,0.16)",
     inputBackground: "rgba(40,36,32,0.60)",
     cardBackground: "rgba(40,36,32,0.65)",
-    // Status colors
+    // Status colors.
     hostBadge: "#52B788",
     joinedBadge: "#E6B17E",
-    // Header & glass
+    // Header and glass colors.
     header: "rgba(28,25,23,0.60)",
     glassBorder: "rgba(200,190,175,0.22)",
     glassBackground: "rgba(30,27,22,0.40)",

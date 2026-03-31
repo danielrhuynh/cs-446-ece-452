@@ -22,18 +22,10 @@ export function useSessionEvents(sessionId: string | undefined) {
     }
   }, []);
 
-  const handleTerminalError = useCallback(() => {
-    setLastEvent("session_cancelled");
-  }, []);
+  const handleTerminalError = useCallback((_error: SSEConnectionError) => {}, []);
 
   const isRetryableError = useCallback(
-    (error: SSEConnectionError | undefined, rawError: unknown) =>
-      typeof rawError === "object" &&
-      rawError !== null &&
-      "retryable" in rawError &&
-      typeof error?.retryable === "boolean"
-        ? error.retryable
-        : true,
+    (error: SSEConnectionError | undefined) => error?.retryable !== false,
     [],
   );
 

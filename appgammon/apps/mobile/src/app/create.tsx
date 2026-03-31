@@ -1,7 +1,4 @@
-/**
- * Create Session Screen
- * Code beacon, share actions, game settings, waiting for opponent
- */
+/** Create session screen. */
 
 import { useState, useEffect, useRef } from "react";
 import { View, Text, StyleSheet, Alert, Share, TouchableOpacity } from "react-native";
@@ -36,7 +33,7 @@ import { QRCodeModal } from "@/components/ui/qr-code-modal";
 
 type BestOf = 3 | 5 | 7;
 
-/* ── Pulsing dot for the waiting indicator ── */
+/* Waiting indicator dot. */
 function PulsingDot({ color, delay }: { color: string; delay: number }) {
   const opacity = useSharedValue(0.25);
 
@@ -62,7 +59,7 @@ function PulsingDot({ color, delay }: { color: string; delay: number }) {
   );
 }
 
-/* ── Main screen ── */
+/* Screen component. */
 export default function CreateSessionScreen() {
   const router = useRouter();
   const { displayName } = useLocalSearchParams<{ displayName: string }>();
@@ -80,7 +77,7 @@ export default function CreateSessionScreen() {
   const [gameClock, setGameClock] = useState(false);
   const [qrVisible, setQrVisible] = useState(false);
 
-  /* ── Create session on mount ── */
+  /* Create the session after the device ID loads. */
   useEffect(() => {
     async function doCreateSession() {
       if (!deviceId || !displayName || createRequestedRef.current) return;
@@ -101,7 +98,7 @@ export default function CreateSessionScreen() {
     if (!deviceIdLoading && deviceId) void doCreateSession();
   }, [deviceId, deviceIdLoading, displayName]);
 
-  /* ── SSE: react to opponent join / cancellation ── */
+  /* React to join and cancel events. */
   const { session: sseSession, lastEvent: sseEvent } = useSessionEvents(session?.id);
   const navigatedRef = useRef(false);
 
@@ -135,7 +132,7 @@ export default function CreateSessionScreen() {
     }
   }, [bestOf, sseEvent, session, sseSession, displayName, router]);
 
-  /* ── Actions ── */
+  /* User actions. */
   const handleCancel = async () => {
     navigatedRef.current = true;
     if (!session) {
@@ -175,7 +172,7 @@ export default function CreateSessionScreen() {
     }
   };
 
-  /* ── Loading / Error states ── */
+  /* Loading and error states. */
   if (deviceIdLoading || isCreating) {
     return (
       <ScreenContainer>
@@ -204,17 +201,14 @@ export default function CreateSessionScreen() {
     );
   }
 
-  /* ── Main render ── */
+  /* Main render. */
   return (
     <ScreenContainer>
       <View style={styles.outer}>
         <View style={styles.content}>
-          {/* ─── Code beacon ─── */}
           <Animated.View entering={FadeInDown.duration(260)} style={styles.wrap}>
             <LiquidGlass style={[styles.codeCard, Shadows.sm]}>
-              <Text style={[styles.inviteLabel, { color: colors.textMuted }]}>
-                Share this code with your opponent
-              </Text>
+              <Text style={[styles.inviteLabel, { color: colors.textMuted }]}>Share this code</Text>
 
               <TouchableOpacity
                 onPress={handleCopy}
@@ -262,7 +256,6 @@ export default function CreateSessionScreen() {
             </LiquidGlass>
           </Animated.View>
 
-          {/* ─── Settings ─── */}
           <Animated.View entering={FadeInDown.delay(60).duration(260)} style={styles.wrap}>
             <LiquidGlass style={[styles.settingsCard, Shadows.sm]}>
               <View style={styles.settingRow}>
@@ -282,7 +275,6 @@ export default function CreateSessionScreen() {
             </LiquidGlass>
           </Animated.View>
 
-          {/* ─── Waiting ─── */}
           <Animated.View entering={FadeInDown.delay(120).duration(260)}>
             <View style={styles.waitingContainer}>
               <View style={styles.dotsRow}>
@@ -291,13 +283,12 @@ export default function CreateSessionScreen() {
                 ))}
               </View>
               <Text style={[styles.waitingText, { color: colors.textMuted }]}>
-                Waiting for opponent to join
+                Waiting for your opponent
               </Text>
             </View>
           </Animated.View>
         </View>
 
-        {/* ─── Cancel ─── */}
         <Button
           title="Cancel Session"
           variant="ghost"
@@ -320,7 +311,6 @@ export default function CreateSessionScreen() {
   );
 }
 
-/* ── Styles ── */
 const styles = StyleSheet.create({
   outer: {
     flex: 1,
@@ -332,7 +322,6 @@ const styles = StyleSheet.create({
   wrap: { width: "100%", maxWidth: Layout.contentMaxWidth },
   centered: { flex: 1, justifyContent: "center", alignItems: "center", padding: Spacing.xl },
 
-  /* Error */
   errorCard: {
     width: "100%",
     maxWidth: Layout.cardMaxWidth,
@@ -342,7 +331,6 @@ const styles = StyleSheet.create({
   },
   errorText: { fontSize: 16, textAlign: "center", fontFamily: Fonts.medium },
 
-  /* Code beacon */
   codeCard: {
     paddingTop: Spacing.lg,
     paddingBottom: Spacing.md,
@@ -372,7 +360,6 @@ const styles = StyleSheet.create({
   },
   pillLabel: { fontSize: 15, fontFamily: Fonts.semibold },
 
-  /* Settings */
   settingsCard: {
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
@@ -387,11 +374,9 @@ const styles = StyleSheet.create({
   settingLabel: { fontSize: 16, fontFamily: Fonts.medium, flex: 1 },
   settingDivider: { height: StyleSheet.hairlineWidth, marginVertical: Spacing.sm },
 
-  /* Waiting */
   waitingContainer: { alignItems: "center", gap: Spacing.sm, paddingVertical: Spacing.md },
   dotsRow: { flexDirection: "row", gap: 7, alignItems: "center" },
   waitingText: { fontSize: 15, fontFamily: Fonts.medium },
 
-  /* Cancel */
   cancelBtn: { alignSelf: "center" },
 });

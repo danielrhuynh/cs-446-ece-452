@@ -48,7 +48,6 @@ export default function TutorialScreen() {
   const colorScheme = useColorScheme() ?? "light";
   const colors = Colors[colorScheme];
   const openedFromHome = source === "home";
-
   const finishLabel = useMemo(
     () => (openedFromHome ? "Done" : "Continue to App"),
     [openedFromHome],
@@ -77,8 +76,7 @@ export default function TutorialScreen() {
         <Animated.View entering={FadeInDown.duration(280)} style={styles.hero}>
           <Text style={[styles.heroTitle, { color: colors.text }]}>How Appgammon plays</Text>
           <Text style={[styles.heroLead, { color: colors.textMuted }]}>
-            A short read: what you are racing toward, how points add up, and what the board expects
-            from each move.
+            Learn how matches score, how games end, and how pieces move.
           </Text>
           <View style={[styles.heroRule, { backgroundColor: colors.border }]} />
         </Animated.View>
@@ -90,11 +88,10 @@ export default function TutorialScreen() {
         >
           <Animated.View entering={FadeInDown.delay(50).duration(320)}>
             <LiquidGlass style={[styles.panel, Shadows.sm]}>
-              <SectionIntro eyebrow="Match" title="Race to the total your table agreed on">
+              <SectionIntro eyebrow="Match" title="Reach the target score first">
                 <BodyLine>
-                  The series is first to 3, 5, or 7 points—whoever hits that cap wins the match. You
-                  only move the match needle by finishing individual games, not by collecting pretty
-                  stacks.
+                  Your table picks a match length: first to 3, 5, or 7 points. Win games to earn
+                  points. Reach the target first and you win the match.
                 </BodyLine>
               </SectionIntro>
             </LiquidGlass>
@@ -104,11 +101,11 @@ export default function TutorialScreen() {
             <LiquidGlass style={[styles.panel, Shadows.sm]}>
               <SectionIntro
                 eyebrow="Finishing a game"
-                title="Clear the board ahead of your opponent"
+                title="Bring your checkers home and bear them off"
               >
                 <BodyLine>
-                  Your goal each game is to bring every checker home, then bear them off. Whoever
-                  bears off first takes that game and banks the points shown in the table below.
+                  Move all of your checkers into your home board, then bear them off. The first
+                  player to clear every checker wins the game and scores from the table below.
                 </BodyLine>
               </SectionIntro>
 
@@ -116,14 +113,14 @@ export default function TutorialScreen() {
                 <View style={[styles.tableRow, { borderBottomColor: colors.border }]}>
                   <View style={styles.tableLabelCol}>
                     <Text style={[styles.tableName, { color: colors.text }]}>Single</Text>
-                    <MutedLine>They got pieces off, but you still finished first.</MutedLine>
+                    <MutedLine>Your opponent bore off at least one checker.</MutedLine>
                   </View>
                   <Text style={[styles.tablePts, { color: colors.primary }]}>1</Text>
                 </View>
                 <View style={[styles.tableRow, { borderBottomColor: colors.border }]}>
                   <View style={styles.tableLabelCol}>
                     <Text style={[styles.tableName, { color: colors.text }]}>Gammon</Text>
-                    <MutedLine>They never removed a single checker.</MutedLine>
+                    <MutedLine>Your opponent did not bear off any checkers.</MutedLine>
                   </View>
                   <Text style={[styles.tablePts, { color: colors.primary }]}>2</Text>
                 </View>
@@ -131,8 +128,8 @@ export default function TutorialScreen() {
                   <View style={styles.tableLabelCol}>
                     <Text style={[styles.tableName, { color: colors.text }]}>Backgammon</Text>
                     <MutedLine>
-                      When you finish, they still have a piece on the bar or sitting in your home
-                      quadrant.
+                      Your opponent still has a checker on the bar or in your home board when you
+                      finish.
                     </MutedLine>
                   </View>
                   <Text style={[styles.tablePts, { color: colors.primary }]}>3</Text>
@@ -143,15 +140,15 @@ export default function TutorialScreen() {
 
           <Animated.View entering={FadeInDown.delay(130).duration(320)}>
             <LiquidGlass style={[styles.panel, Shadows.sm]}>
-              <SectionIntro eyebrow="Doubling" title="Offers that multiply what is on the line">
+              <SectionIntro eyebrow="Doubling" title="Raise the stakes with the cube">
                 <BodyLine>
-                  On your turn—or before it begins—you can offer to double how much this game pays.
-                  Accept, and play continues at the new stakes. Pass, and you hand them the game at
-                  the current cube value instead of playing it out.
+                  Before you roll, you can offer a double. If your opponent accepts, the game keeps
+                  going at twice the current value. If they pass, you win the game at the current
+                  cube value.
                 </BodyLine>
                 <BodyLine>
-                  Doubles can chain. If the cube has been accepted twice already, a backgammon base
-                  of three multiplies like this: 3 x 2 x 2 = 12 match points from that one game.
+                  Players can redouble later. If the cube reaches 4, a backgammon is worth 12 points
+                  because 3 x 4 = 12.
                 </BodyLine>
               </SectionIntro>
             </LiquidGlass>
@@ -159,23 +156,20 @@ export default function TutorialScreen() {
 
           <Animated.View entering={FadeInDown.delay(170).duration(320)}>
             <LiquidGlass style={[styles.panel, Shadows.sm]}>
-              <SectionIntro eyebrow="Board basics" title="Same start, opposite directions">
+              <SectionIntro eyebrow="Board basics" title="Both players start from the same layout">
                 <BodyLine>
-                  Both sides begin from the familiar opening: mirrored stacks on the six, eight,
-                  thirteen, and twenty-four points. White travels counterclockwise toward home; red
-                  runs clockwise toward theirs.
+                  Both players start with mirrored stacks on the 6, 8, 13, and 24 points. White
+                  moves counterclockwise toward home. Red moves clockwise.
                 </BodyLine>
                 <BodyLine>
-                  Land on a point with two or more enemy checkers and the lane is closed. Land on a
-                  lone opponent and that checker goes to the bar—they have to re-enter before
-                  anything else sensible happens.
+                  A point with two or more opposing checkers is closed. A point with one opposing
+                  checker is a blot. Hit it and that checker goes to the bar. A player with a
+                  checker on the bar must re-enter before making any other move.
                 </BodyLine>
                 <BodyLine>
-                  Bearing off only unlocks once every one of your checkers sits in your home board.
+                  You can bear off only after all of your checkers are in your home board.
                 </BodyLine>
-                <MutedLine>
-                  In the live table you will see the exact layout—this screen stays high level.
-                </MutedLine>
+                <MutedLine>The game screen shows the full board and legal moves.</MutedLine>
               </SectionIntro>
             </LiquidGlass>
           </Animated.View>

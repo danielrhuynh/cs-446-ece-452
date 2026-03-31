@@ -14,14 +14,9 @@ import {
   createOpeningGameState,
   determineWinnerRole,
   hasAnyLegalMove,
-  initializeDiceUsed,
   rollDice,
   rollSingleDie,
-  type Bar,
-  type Board,
-  type BorneOff,
   type Dice,
-  type DiceUsed,
   type GameState,
   type Move,
   type PlayerRole,
@@ -29,7 +24,7 @@ import {
   validateTurn,
 } from "@appgammon/common";
 import { gameEventBus } from "../event-bus/game-event-bus";
-import { drizzleGameRepository } from "../repositories/game-repository";
+import { drizzleGameRepository, type SessionGameContext } from "../repositories/game-repository";
 import { logger } from "../utils/logger";
 
 const gameRepository = drizzleGameRepository;
@@ -39,12 +34,26 @@ const gameRepository = drizzleGameRepository;
 const lastEmoteTimestamp = new Map<string, number>();
 const EMOTE_COOLDOWN_MS = 3000;
 
-function getPlayerRole(playerId: string, player1Id: string): PlayerRole {
-  return playerId === player1Id ? "player1" : "player2";
+type ActionResult = { success: true } | { success: false; error: string; status: number };
+type StartSeriesResult =
+  | { success: true; data: SeriesState }
+  | { success: false; error: string; status: number };
+
+function getPlayerRole(playerId: string, player1Id: string, player2Id: string): PlayerRole | null {
+  if (playerId === player1Id) return "player1";
+  if (playerId === player2Id) return "player2";
+  return null;
 }
 
-function getOpponentId(playerId: string, player1Id: string, player2Id: string): string {
-  return playerId === player1Id ? player2Id : player1Id;
+function getOpponentId(role: PlayerRole, player1Id: string, player2Id: string): string {
+  return role === "player1" ? player2Id : player1Id;
+}
+
+async function getGameContext(
+  sessionId: string,
+  gameId: string,
+): Promise<SessionGameContext | null> {
+  return gameRepository.getGameInSession(sessionId, gameId);
 }
 
 function seriesToState(
@@ -97,9 +106,24 @@ async function createNewGame(
   return game;
 }
 
-export async function startSeries(sessionId: string, bestOf: number): Promise<SeriesState> {
+export async function startSeries(sessionId: string, bestOf: number): Promise<StartSeriesResult> {
+  const existingSeries = await gameRepository.getActiveSeries(sessionId);
+  if (existingSeries) {
+    return {
+      success: false,
+      error: "An active series already exists for this session",
+      status: 409,
+    };
+  }
+
   const players = await gameRepository.getSessionPlayers(sessionId);
-  if (!players) throw new Error("Session not found or missing player 2");
+  if (!players) {
+    return {
+      success: false,
+      error: "Session not found or missing player 2",
+      status: 404,
+    };
+  }
 
   const seriesRecord = await gameRepository.createSeries(sessionId, bestOf);
   const game = await createNewGame(seriesRecord.id, players.player1Id, players.player2Id);
@@ -108,7 +132,7 @@ export async function startSeries(sessionId: string, bestOf: number): Promise<Se
 
   const state = seriesToState(seriesRecord, game);
   gameEventBus.publish(sessionId, { type: "game_state", data: state });
-  return state;
+  return { success: true, data: state };
 }
 
 export async function getSeriesState(sessionId: string): Promise<SeriesState | null> {
@@ -125,28 +149,29 @@ export async function submitMoves(
   version: number,
   playerMoves: Move[],
   sessionId: string,
-): Promise<{ success: boolean; error?: string; status?: number }> {
-  const game = await gameRepository.getGame(gameId);
-  if (!game) return { success: false, error: "Game not found", status: 404 };
+): Promise<ActionResult> {
+  const context = await getGameContext(sessionId, gameId);
+  if (!context) return { success: false, error: "Game not found for session", status: 404 };
+  const { game, player1Id, player2Id } = context;
   if (game.version !== version) return { success: false, error: "Version mismatch", status: 409 };
   if (game.currentTurn !== playerId) return { success: false, error: "Not your turn", status: 403 };
   if (game.turnPhase !== "moving")
     return { success: false, error: "Not in moving phase", status: 400 };
   if (!game.dice || !game.diceUsed) return { success: false, error: "No dice rolled", status: 400 };
 
-  const sessionPlayers = await gameRepository.getSessionPlayers(sessionId);
-  if (!sessionPlayers) return { success: false, error: "Session not found", status: 404 };
+  const role = getPlayerRole(playerId, player1Id, player2Id);
+  if (!role) return { success: false, error: "Forbidden", status: 403 };
+  const opponentId = getOpponentId(role, player1Id, player2Id);
 
-  const role = getPlayerRole(playerId, sessionPlayers.player1Id);
-  const opponentId = getOpponentId(playerId, sessionPlayers.player1Id, sessionPlayers.player2Id);
-
-  const board = game.board as Board;
-  const bar = game.bar as Bar;
-  const borneOff = game.borneOff as BorneOff;
-  const dice = game.dice as Dice;
-  const diceUsed = game.diceUsed as DiceUsed;
-
-  const result = validateTurn(board, bar, borneOff, dice, diceUsed, playerMoves, role);
+  const result = validateTurn(
+    game.board,
+    game.bar,
+    game.borneOff,
+    game.dice,
+    game.diceUsed,
+    playerMoves,
+    role,
+  );
   if (!result.valid) {
     return { success: false, error: result.error ?? "Invalid moves", status: 422 };
   }
@@ -156,7 +181,7 @@ export async function submitMoves(
 
   const winnerRole = determineWinnerRole(result.newBorneOff);
   if (winnerRole) {
-    const winnerId = winnerRole === "player1" ? sessionPlayers.player1Id : sessionPlayers.player2Id;
+    const winnerId = winnerRole === "player1" ? player1Id : player2Id;
     const points = calculateGamePoints(
       result.newBoard,
       result.newBar,
@@ -188,8 +213,7 @@ export async function submitMoves(
     });
 
     if (nextSeries.status === "complete") {
-      const seriesWinnerId =
-        nextSeries.winnerRole === "player1" ? sessionPlayers.player1Id : sessionPlayers.player2Id;
+      const seriesWinnerId = nextSeries.winnerRole === "player1" ? player1Id : player2Id;
 
       await gameRepository.updateSeries(seriesRecord.id, {
         player1Score: nextSeries.player1Score,
@@ -212,7 +236,7 @@ export async function submitMoves(
         player2Score: nextSeries.player2Score,
       });
 
-      await createNewGame(seriesRecord.id, sessionPlayers.player1Id, sessionPlayers.player2Id);
+      await createNewGame(seriesRecord.id, player1Id, player2Id);
       gameEventBus.publish(sessionId, {
         type: "game_over",
         data: {
@@ -237,7 +261,7 @@ export async function submitMoves(
     board: result.newBoard,
     bar: result.newBar,
     borneOff: result.newBorneOff,
-    player1Id: sessionPlayers.player1Id,
+    player1Id,
     currentPlayerId: playerId,
     opponentId,
     doublingCube: game.doublingCube,
@@ -270,9 +294,10 @@ export async function proposeDouble(
   gameId: string,
   playerId: string,
   sessionId: string,
-): Promise<{ success: boolean; error?: string; status?: number }> {
-  const game = await gameRepository.getGame(gameId);
-  if (!game) return { success: false, error: "Game not found", status: 404 };
+): Promise<ActionResult> {
+  const context = await getGameContext(sessionId, gameId);
+  if (!context) return { success: false, error: "Game not found for session", status: 404 };
+  const { game, player1Id, player2Id } = context;
   if (game.currentTurn !== playerId) return { success: false, error: "Not your turn", status: 403 };
   if (game.turnPhase !== "waiting_for_roll_or_double") {
     return { success: false, error: "Cannot double in this phase", status: 400 };
@@ -287,15 +312,14 @@ export async function proposeDouble(
     version: game.version + 1,
   });
 
-  const sessionPlayers = await gameRepository.getSessionPlayers(sessionId);
-  if (sessionPlayers) {
-    const opponentId = getOpponentId(playerId, sessionPlayers.player1Id, sessionPlayers.player2Id);
-    gameEventBus.publish(sessionId, {
-      type: "double_proposed",
-      data: { cubeValue: game.doublingCube * 2, proposedBy: playerId },
-      forPlayer: opponentId,
-    });
-  }
+  const role = getPlayerRole(playerId, player1Id, player2Id);
+  if (!role) return { success: false, error: "Forbidden", status: 403 };
+  const opponentId = getOpponentId(role, player1Id, player2Id);
+  gameEventBus.publish(sessionId, {
+    type: "double_proposed",
+    data: { cubeValue: game.doublingCube * 2, proposedBy: playerId },
+    forPlayer: opponentId,
+  });
 
   logger.info({ gameId, playerId, newValue: game.doublingCube * 2 }, "[GAME] Double proposed");
   return { success: true };
@@ -306,18 +330,16 @@ export async function respondToDouble(
   playerId: string,
   action: "accept" | "decline",
   sessionId: string,
-): Promise<{ success: boolean; error?: string; status?: number }> {
-  const game = await gameRepository.getGame(gameId);
-  if (!game) return { success: false, error: "Game not found", status: 404 };
+): Promise<ActionResult> {
+  const context = await getGameContext(sessionId, gameId);
+  if (!context) return { success: false, error: "Game not found for session", status: 404 };
+  const { game, player1Id, player2Id } = context;
   if (game.turnPhase !== "double_proposed") {
     return { success: false, error: "No double pending", status: 400 };
   }
   if (game.currentTurn === playerId) {
     return { success: false, error: "You proposed the double", status: 403 };
   }
-
-  const sessionPlayers = await gameRepository.getSessionPlayers(sessionId);
-  if (!sessionPlayers) return { success: false, error: "Session not found", status: 404 };
 
   if (action === "accept") {
     const newCubeValue = game.doublingCube * 2;
@@ -332,7 +354,8 @@ export async function respondToDouble(
     logger.info({ gameId, playerId, cubeValue: newCubeValue }, "[GAME] Double accepted");
   } else {
     const proposerId = game.currentTurn;
-    const proposerRole = getPlayerRole(proposerId, sessionPlayers.player1Id);
+    const proposerRole = getPlayerRole(proposerId, player1Id, player2Id);
+    if (!proposerRole) return { success: false, error: "Forbidden", status: 403 };
     const points = game.doublingCube;
 
     await gameRepository.updateGame(gameId, {
@@ -354,8 +377,7 @@ export async function respondToDouble(
     });
 
     if (nextSeries.status === "complete") {
-      const seriesWinnerId =
-        nextSeries.winnerRole === "player1" ? sessionPlayers.player1Id : sessionPlayers.player2Id;
+      const seriesWinnerId = nextSeries.winnerRole === "player1" ? player1Id : player2Id;
 
       await gameRepository.updateSeries(seriesRecord.id, {
         player1Score: nextSeries.player1Score,
@@ -378,7 +400,7 @@ export async function respondToDouble(
         player2Score: nextSeries.player2Score,
       });
 
-      await createNewGame(seriesRecord.id, sessionPlayers.player1Id, sessionPlayers.player2Id);
+      await createNewGame(seriesRecord.id, player1Id, player2Id);
     }
 
     gameEventBus.publish(sessionId, {
@@ -420,9 +442,10 @@ export async function rollForTurn(
   gameId: string,
   playerId: string,
   sessionId: string,
-): Promise<{ success: boolean; error?: string; status?: number }> {
-  const game = await gameRepository.getGame(gameId);
-  if (!game) return { success: false, error: "Game not found", status: 404 };
+): Promise<ActionResult> {
+  const context = await getGameContext(sessionId, gameId);
+  if (!context) return { success: false, error: "Game not found for session", status: 404 };
+  const { game, player1Id, player2Id } = context;
   if (game.currentTurn !== playerId) return { success: false, error: "Not your turn", status: 403 };
   if (game.turnPhase !== "waiting_for_roll_or_double") {
     return { success: false, error: "Cannot roll in this phase", status: 400 };
@@ -431,54 +454,25 @@ export async function rollForTurn(
     return { success: false, error: "No dice available", status: 400 };
   }
 
-  const sessionPlayers = await gameRepository.getSessionPlayers(sessionId);
-  if (!sessionPlayers) return { success: false, error: "Session not found", status: 404 };
+  const role = getPlayerRole(playerId, player1Id, player2Id);
+  if (!role) return { success: false, error: "Forbidden", status: 403 };
 
-  const role = getPlayerRole(playerId, sessionPlayers.player1Id);
-  const board = game.board as Board;
-  const bar = game.bar as Bar;
-  const borneOff = game.borneOff as BorneOff;
-  const dice = game.dice as Dice;
-  const diceUsed = game.diceUsed as DiceUsed;
-
-  if (!hasAnyLegalMove(board, bar, borneOff, dice, diceUsed, role)) {
+  if (!hasAnyLegalMove(game.board, game.bar, game.borneOff, game.dice, game.diceUsed, role)) {
     logger.info({ gameId, playerId }, "[GAME] Skipping turn, no legal moves");
-    const opponentId = getOpponentId(playerId, sessionPlayers.player1Id, sessionPlayers.player2Id);
-    const canOpponentDouble =
-      game.doublingCube < 64 && (game.cubeOwner === null || game.cubeOwner === opponentId);
-
-    const nextTurn = canOpponentDouble
-      ? (() => {
-          const opponentRoll = rollDice();
-          return {
-            currentTurn: opponentId,
-            turnPhase: "waiting_for_roll_or_double" as const,
-            dice: opponentRoll,
-            diceUsed: initializeDiceUsed(opponentRoll),
-          };
-        })()
-      : (() => {
-          const opponentRole = getPlayerRole(opponentId, sessionPlayers.player1Id);
-          const opponentRoll = rollDice();
-          const opponentDiceUsed = initializeDiceUsed(opponentRoll);
-
-          if (hasAnyLegalMove(board, bar, borneOff, opponentRoll, opponentDiceUsed, opponentRole)) {
-            return {
-              currentTurn: opponentId,
-              turnPhase: "moving" as const,
-              dice: opponentRoll,
-              diceUsed: opponentDiceUsed,
-            };
-          }
-
-          const currentPlayerRoll = rollDice();
-          return {
-            currentTurn: playerId,
-            turnPhase: "moving" as const,
-            dice: currentPlayerRoll,
-            diceUsed: initializeDiceUsed(currentPlayerRoll),
-          };
-        })();
+    const opponentId = getOpponentId(role, player1Id, player2Id);
+    const nextTurn = advanceTurnState({
+      board: game.board,
+      bar: game.bar,
+      borneOff: game.borneOff,
+      player1Id,
+      currentPlayerId: playerId,
+      opponentId,
+      doublingCube: game.doublingCube,
+      cubeOwner: game.cubeOwner,
+      opponentRoll: rollDice(),
+      currentPlayerRoll: rollDice(),
+      fallbackOpponentRoll: rollDice(),
+    });
 
     await gameRepository.updateGame(gameId, {
       currentTurn: nextTurn.currentTurn,

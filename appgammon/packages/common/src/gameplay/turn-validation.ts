@@ -41,17 +41,15 @@ export function validateTurn(
   // Apply each move sequentially
   for (let i = 0; i < moves.length; i++) {
     const move = moves[i];
-    const available = getAvailableDice(dice, curDiceUsed);
-
-    // Find which available die allows this move (handles overshoot bear-offs)
-    let matchedDie: number | null = null;
-    for (const die of new Set(available)) {
-      const validMoves = getValidMoves(curBoard, curBar, curBorneOff, role, die);
-      if (validMoves.some((m) => m.from === move.from && m.to === move.to)) {
-        matchedDie = die;
-        break;
-      }
-    }
+    const matchedDie = findMatchingDieForMove(
+      curBoard,
+      curBar,
+      curBorneOff,
+      dice,
+      curDiceUsed,
+      move,
+      role,
+    );
 
     if (matchedDie === null) {
       return {
@@ -130,6 +128,27 @@ export function validateTurn(
     newBorneOff: curBorneOff,
     newDiceUsed: curDiceUsed,
   };
+}
+
+export function findMatchingDieForMove(
+  board: Board,
+  bar: Bar,
+  borneOff: BorneOff,
+  dice: Dice,
+  diceUsed: DiceUsed,
+  move: Move,
+  role: PlayerRole,
+): number | null {
+  const available = getAvailableDice(dice, diceUsed);
+
+  for (const die of new Set(available)) {
+    const validMoves = getValidMoves(board, bar, borneOff, role, die);
+    if (validMoves.some((candidate) => candidate.from === move.from && candidate.to === move.to)) {
+      return die;
+    }
+  }
+
+  return null;
 }
 
 /** Check if a specific die value can be used (has at least one legal move). */

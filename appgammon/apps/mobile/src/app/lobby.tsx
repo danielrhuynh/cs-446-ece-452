@@ -1,7 +1,4 @@
-/**
- * Lobby — Match-up screen
- * Players face off, scoreboard between them, host starts the game.
- */
+/** Lobby screen. */
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { View, Text, StyleSheet, Alert, Platform, ActivityIndicator } from "react-native";
@@ -27,7 +24,7 @@ import { ScreenContainer } from "@/components/ui/screen-container";
 import { BackButton } from "@/components/ui/back-button";
 import { LoadingCard } from "@/components/ui/loading-card";
 
-/* ── Animated status dot: pulses amber while waiting, solid green when ready ── */
+/* Status dot. */
 function PulsingStatusDot({ color }: { color: string }) {
   const pulse = useSharedValue(0);
 
@@ -47,7 +44,7 @@ function PulsingStatusDot({ color }: { color: string }) {
   return <Animated.View style={[styles.statusDot, { backgroundColor: color }, style]} />;
 }
 
-/* ── Ghost avatar that breathes while waiting for opponent ── */
+/* Placeholder avatar. */
 function EmptyAvatar({ borderColor }: { borderColor: string }) {
   const pulse = useSharedValue(0);
 
@@ -70,7 +67,7 @@ function EmptyAvatar({ borderColor }: { borderColor: string }) {
   );
 }
 
-/* ── Status labels ── */
+/* Session status labels. */
 const STATUS_LABELS: Record<string, string> = {
   open: "Waiting for opponent",
   closed: "Ready to start",
@@ -78,7 +75,7 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled: "Session cancelled",
 };
 
-/* ── Main screen ── */
+/* Screen component. */
 export default function LobbyScreen() {
   const router = useRouter();
   const { sessionId, isHost, displayName, bestOf } = useLocalSearchParams<{
@@ -96,7 +93,7 @@ export default function LobbyScreen() {
   const [score, setScore] = useState({ player1: 0, player2: 0 });
   const navigatedRef = useRef(false);
 
-  // Fetch series scores if a series exists (e.g. returning between games)
+  // Load the current series score when available.
   useEffect(() => {
     if (!sessionId) return;
     void syncGame(sessionId)
@@ -106,11 +103,10 @@ export default function LobbyScreen() {
         }
       })
       .catch(() => {
-        /* no active series yet — scores stay 0-0 */
+        /* No active series yet. */
       });
   }, [sessionId]);
 
-  /* ── SSE navigation ── */
   useEffect(() => {
     if (navigatedRef.current) return;
     if (lastEvent === "session_cancelled" || session?.status === "cancelled") {
@@ -127,9 +123,7 @@ export default function LobbyScreen() {
     }
   }, [isHostBool, lastEvent, session, router]);
 
-  /* ── Actions ── */
   const doLeave = useCallback(async () => {
-    // BUG FIX: Always cancel session when leaving, not just when in_game
     if (sessionId) {
       try {
         await cancelSession(sessionId);
@@ -174,7 +168,7 @@ export default function LobbyScreen() {
 
   const youTag = (name: string | null | undefined) => (name === displayName ? " (You)" : "");
 
-  /* ── Loading ── */
+  /* Loading state. */
   if (!session) {
     return (
       <ScreenContainer>
@@ -188,7 +182,7 @@ export default function LobbyScreen() {
     );
   }
 
-  /* ── Main render ── */
+  /* Main render. */
   return (
     <ScreenContainer>
       <View style={styles.headerWrap}>
@@ -196,7 +190,6 @@ export default function LobbyScreen() {
       </View>
 
       <View style={styles.container}>
-        {/* Status */}
         <Animated.View entering={FadeIn.duration(300)} style={styles.statusSection}>
           <Text style={[styles.title, { color: colors.text }]}>Game Lobby</Text>
           <View style={styles.statusRow}>
@@ -212,10 +205,8 @@ export default function LobbyScreen() {
           </View>
         </Animated.View>
 
-        {/* ─── VS card ─── */}
         <Animated.View entering={FadeInDown.duration(320)} style={styles.vsWrap}>
           <LiquidGlass style={[styles.vsCard, Shadows.sm]}>
-            {/* Player 1 */}
             <View
               style={styles.playerRow}
               accessibilityLabel={`Player 1: ${session.player_1?.name || "Host"}, Host, Ready`}
@@ -238,7 +229,6 @@ export default function LobbyScreen() {
               </View>
             </View>
 
-            {/* Divider */}
             <View style={styles.vsDivider}>
               <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
               <View style={[styles.vsCircle, { borderColor: colors.border }]}>
@@ -247,7 +237,6 @@ export default function LobbyScreen() {
               <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
             </View>
 
-            {/* Player 2 or waiting */}
             {session.player_2 ? (
               <Animated.View
                 entering={FadeInUp.duration(400)}
@@ -272,11 +261,11 @@ export default function LobbyScreen() {
                 </View>
               </Animated.View>
             ) : (
-              <View style={styles.playerRow} accessibilityLabel="Waiting for opponent to join">
+              <View style={styles.playerRow} accessibilityLabel="Waiting for opponent">
                 <EmptyAvatar borderColor={colors.border} />
                 <View style={styles.playerInfo}>
                   <Text style={[styles.waitingForLabel, { color: colors.textMuted }]}>
-                    Waiting for opponent...
+                    Waiting for opponent
                   </Text>
                   <ActivityIndicator
                     size="small"
@@ -289,7 +278,6 @@ export default function LobbyScreen() {
           </LiquidGlass>
         </Animated.View>
 
-        {/* ─── Scoreboard ─── */}
         <Animated.View entering={FadeInDown.delay(80).duration(300)} style={styles.scoreWrap}>
           <LiquidGlass style={[styles.scoreCard, Shadows.sm]}>
             <Text style={[styles.scoreHeader, { color: colors.textMuted }]}>SCOREBOARD</Text>
@@ -312,10 +300,8 @@ export default function LobbyScreen() {
           </LiquidGlass>
         </Animated.View>
 
-        {/* Spacer */}
         <View style={{ flex: 1 }} />
 
-        {/* ─── Action ─── */}
         <Animated.View entering={FadeInDown.delay(160).duration(300)} style={styles.actionWrap}>
           {isHostBool ? (
             <>
@@ -351,7 +337,7 @@ export default function LobbyScreen() {
   );
 }
 
-/* ── Styles ── */
+/* Styles. */
 const styles = StyleSheet.create({
   headerWrap: { paddingHorizontal: Spacing.md, paddingTop: Spacing.xs, alignItems: "flex-start" },
   container: {
@@ -369,7 +355,7 @@ const styles = StyleSheet.create({
   statusDot: { width: 10, height: 10, borderRadius: 5 },
   statusLabel: { fontSize: 15, fontFamily: Fonts.medium },
 
-  /* VS card */
+  /* Matchup card */
   vsWrap: {
     width: "100%",
     maxWidth: Layout.contentMaxWidth,

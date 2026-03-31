@@ -1,8 +1,4 @@
-/**
- * Game Screen
- * Shows backgammon board, dice, doubling cube, emotes.
- * All gameplay state is server-driven via SSE.
- */
+/** Game screen. */
 
 import { useCallback, useEffect, useRef } from "react";
 import { View, StyleSheet, ActivityIndicator, Alert, Platform, ScrollView } from "react-native";
@@ -55,7 +51,7 @@ export default function GameScreen() {
     if (!gameOverInfo) return;
     const iWon = gameOverInfo.winnerId === myPlayerId;
     Alert.alert(
-      iWon ? "You won this game!" : "You lost this game",
+      iWon ? "You won this game" : "You lost this game",
       `Score: ${gameOverInfo.player1Score} – ${gameOverInfo.player2Score}`,
     );
   }, [gameOverInfo, myPlayerId]);
@@ -64,7 +60,7 @@ export default function GameScreen() {
     if (!seriesCompleteInfo) return;
     const iWon = seriesCompleteInfo.winnerId === myPlayerId;
     Alert.alert(
-      iWon ? "You won the match!" : "Match over",
+      iWon ? "You won the match" : "Match over",
       `Final score: ${seriesCompleteInfo.player1Score} – ${seriesCompleteInfo.player2Score}`,
       [
         {

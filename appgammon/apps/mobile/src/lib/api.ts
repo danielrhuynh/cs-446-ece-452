@@ -6,32 +6,34 @@ import type { Move } from "@appgammon/common";
 
 const REQUEST_TIMEOUT_MS = 10000;
 
-const client = hc<AppType>(API_BASE_URL, {
-  fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
-    const [token, deviceId] = await Promise.all([getAuthToken(), getDeviceId()]);
+async function authFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const [token, deviceId] = await Promise.all([getAuthToken(), getDeviceId()]);
 
-    const headers = new Headers(init?.headers);
-    headers.set("Content-Type", "application/json");
-    if (token) headers.set("Authorization", `Bearer ${token}`);
-    if (deviceId) headers.set("X-Device-Id", deviceId);
+  const headers = new Headers(init?.headers);
+  headers.set("Content-Type", "application/json");
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  if (deviceId) headers.set("X-Device-Id", deviceId);
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-    try {
-      return await fetch(input, { ...init, headers, signal: controller.signal });
-    } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") {
-        throw new Error(
-          `Request timed out after ${REQUEST_TIMEOUT_MS / 1000}s. ` +
-            `Cannot reach backend at ${API_BASE_URL}.`,
-        );
-      }
-      throw new Error(`Network request failed. Cannot reach backend at ${API_BASE_URL}.`);
-    } finally {
-      clearTimeout(timeoutId);
+  try {
+    return await fetch(input, { ...init, headers, signal: controller.signal });
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error(
+        `Request timed out after ${REQUEST_TIMEOUT_MS / 1000}s. ` +
+          `Cannot reach backend at ${API_BASE_URL}.`,
+      );
     }
-  },
+    throw new Error(`Network request failed. Cannot reach backend at ${API_BASE_URL}.`);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+const client = hc<AppType>(API_BASE_URL, {
+  fetch: authFetch,
 });
 
 async function unwrap<T>(res: { ok: boolean; json(): Promise<unknown> }): Promise<T> {
@@ -59,39 +61,6 @@ function normalizeId(sessionId: string) {
   return sessionId.toUpperCase().replace(/-/g, "");
 }
 
-/**
- * Authenticated fetch for routes where query params aren't part of the
- * Hono RPC type (double, roll, emote use `c.req.query()` directly).
- */
-async function apiFetch(path: string, method: string = "POST"): Promise<Response> {
-  const [token, deviceId] = await Promise.all([getAuthToken(), getDeviceId()]);
-
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-  if (deviceId) headers["X-Device-Id"] = deviceId;
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
-  try {
-    return await fetch(`${API_BASE_URL}${path}`, {
-      method,
-      headers,
-      signal: controller.signal,
-    });
-  } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      throw new Error(
-        `Request timed out after ${REQUEST_TIMEOUT_MS / 1000}s. ` +
-          `Cannot reach backend at ${API_BASE_URL}.`,
-      );
-    }
-    throw new Error(`Network request failed. Cannot reach backend at ${API_BASE_URL}.`);
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
 // ── Session response types ──
 
 export type CreateSessionRes = InferResponseType<typeof client.sessions.create.$post, 200>;
@@ -99,7 +68,6 @@ export type JoinSessionRes = InferResponseType<
   (typeof client.sessions)[":id"]["join"]["$post"],
   200
 >;
-export type GetSessionRes = InferResponseType<(typeof client.sessions)[":id"]["$get"], 200>;
 export type StartGameRes = InferResponseType<
   (typeof client.sessions)[":id"]["start"]["$post"],
   200
@@ -148,18 +116,6 @@ export async function cancelSession(sessionId: string) {
   return unwrap<CancelSessionRes>(res);
 }
 
-export async function getSession(sessionId: string) {
-  try {
-    const res = await client.sessions[":id"].$get({
-      param: { id: normalizeId(sessionId) },
-    });
-    return await unwrap<GetSessionRes>(res);
-  } catch (error) {
-    console.log("[API] getSession error:", error);
-    return null;
-  }
-}
-
 // ── Game API ──
 
 export async function startSeries(sessionId: string, bestOf: number) {
@@ -192,7 +148,9 @@ export async function submitMoves(
 
 export async function proposeDouble(sessionId: string, gameId: string) {
   const id = normalizeId(sessionId);
-  const res = await apiFetch(`/games/${id}/double?action=propose&game_id=${gameId}`);
+  const res = await authFetch(
+    `${API_BASE_URL}/games/${id}/double?action=propose&game_id=${gameId}`,
+  );
   return unwrap<{ ok: true }>(res);
 }
 
@@ -202,18 +160,20 @@ export async function respondToDouble(
   action: "accept" | "decline",
 ) {
   const id = normalizeId(sessionId);
-  const res = await apiFetch(`/games/${id}/double?action=${action}&game_id=${gameId}`);
+  const res = await authFetch(
+    `${API_BASE_URL}/games/${id}/double?action=${action}&game_id=${gameId}`,
+  );
   return unwrap<{ ok: true }>(res);
 }
 
 export async function rollDice(sessionId: string, gameId: string) {
   const id = normalizeId(sessionId);
-  const res = await apiFetch(`/games/${id}/roll?game_id=${gameId}`);
+  const res = await authFetch(`${API_BASE_URL}/games/${id}/roll?game_id=${gameId}`);
   return unwrap<{ ok: true }>(res);
 }
 
 export async function sendEmote(sessionId: string, emoteId: string) {
   const id = normalizeId(sessionId);
-  const res = await apiFetch(`/games/${id}/emote?id=${emoteId}`);
+  const res = await authFetch(`${API_BASE_URL}/games/${id}/emote?id=${emoteId}`);
   return unwrap<{ ok: true }>(res);
 }

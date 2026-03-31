@@ -1,7 +1,4 @@
-/**
- * Home / Landing Screen
- * Logo, display name input, Create / Join buttons
- */
+/** Home screen. */
 
 import { useState, useEffect } from "react";
 import { View, Text, StyleSheet, KeyboardAvoidingView, Platform } from "react-native";
@@ -80,7 +77,6 @@ export default function HomeScreen() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <View style={styles.container}>
-          {/* Logo */}
           <View style={styles.logoSection}>
             <Animated.View
               entering={FadeIn.duration(500)}
@@ -98,11 +94,10 @@ export default function HomeScreen() {
               entering={FadeIn.delay(160).duration(400)}
               style={[styles.subtitle, { color: colors.textMuted }]}
             >
-              Play with friends — no account needed
+              Play with friends. No account required.
             </Animated.Text>
           </View>
 
-          {/* Card */}
           <Animated.View entering={FadeInDown.delay(200).duration(380)} style={styles.cardWrap}>
             <LiquidGlass style={[styles.mainCard, Shadows.md]}>
               <View style={styles.inputSection}>
@@ -151,7 +146,7 @@ export default function HomeScreen() {
                     router.push({ pathname: "/tutorial" as never, params: { source: "home" } })
                   }
                   accessibilityLabel="Open the backgammon tutorial again"
-                  accessibilityHint="Shows rules and scoring on a separate screen"
+                  accessibilityHint="Shows the rules and scoring screen"
                 />
               </View>
             </LiquidGlass>

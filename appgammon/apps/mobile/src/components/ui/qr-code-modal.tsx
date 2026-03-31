@@ -22,7 +22,7 @@ export function QRCodeModal({ visible, onClose, deepLinkUrl, sessionCode }: QRCo
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable onPress={(e) => e.stopPropagation()}>
           <LiquidGlass style={[styles.card, Shadows.lg]}>
-            <Text style={[styles.title, { color: colors.text }]}>Scan to Join</Text>
+            <Text style={[styles.title, { color: colors.text }]}>Scan to join</Text>
 
             <View style={styles.qrWrapper}>
               <QRCode value={deepLinkUrl} size={200} backgroundColor="#FFFFFF" />

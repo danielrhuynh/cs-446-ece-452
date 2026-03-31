@@ -1,7 +1,4 @@
-/**
- * Join Session Screen
- * Session code input, join button, name modal for deep link flows
- */
+/** Join session screen. */
 
 import { useEffect, useMemo, useState, useCallback } from "react";
 import {
@@ -54,11 +51,9 @@ export default function JoinSessionScreen() {
   const [isJoining, setIsJoining] = useState(false);
   const [error, setError] = useState("");
 
-  // QR scanner state
   const [showScanner, setShowScanner] = useState(false);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
-  // Name modal state for deep link flow
   const [showNameModal, setShowNameModal] = useState(false);
   const [nameInput, setNameInput] = useState("");
   const [nameError, setNameError] = useState("");
@@ -124,7 +119,6 @@ export default function JoinSessionScreen() {
         }
       }
     } catch {
-      // Not a URL — treat raw text as a potential code
       const sanitized = data
         .toUpperCase()
         .replace(/[^A-Z0-9]/g, "")
@@ -180,12 +174,12 @@ export default function JoinSessionScreen() {
       >
         <View style={styles.outer}>
           <View style={styles.content}>
-            {/* ─── Code entry card ─── */}
+            {/* Code entry card */}
             <Animated.View entering={FadeInDown.duration(260)} style={styles.wrap}>
               <LiquidGlass style={[styles.codeCard, Shadows.sm]}>
                 <Text style={[styles.title, { color: colors.text }]}>Enter Session Code</Text>
                 <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-                  Ask your friend for their 6-character code
+                  Enter the 6-character code your friend sent you
                 </Text>
 
                 <View style={styles.codeInputContainer}>
@@ -213,7 +207,7 @@ export default function JoinSessionScreen() {
               </LiquidGlass>
             </Animated.View>
 
-            {/* ─── Name row ─── */}
+            {/* Name row */}
             {resolvedDisplayName ? (
               <Animated.View entering={FadeInDown.delay(60).duration(260)} style={styles.wrap}>
                 <TouchableOpacity
@@ -264,7 +258,7 @@ export default function JoinSessionScreen() {
               </Text>
             ) : null}
 
-            {/* ─── Join button ─── */}
+            {/* Join button */}
             <Animated.View entering={FadeInDown.delay(120).duration(260)} style={styles.wrap}>
               <Button
                 title="Join Session"
@@ -315,7 +309,7 @@ export default function JoinSessionScreen() {
         </View>
       </Modal>
 
-      {/* Name modal — fixed: Pressable backdrop + stopPropagation on card */}
+      {/* Name modal */}
       <Modal
         visible={showNameModal}
         transparent
@@ -336,11 +330,9 @@ export default function JoinSessionScreen() {
           >
             <Pressable onPress={(e) => e.stopPropagation()} style={styles.modalCardWrap}>
               <LiquidGlass style={[styles.nameModalCard, Shadows.lg]}>
-                <Text style={[styles.nameModalTitle, { color: colors.text }]}>
-                  What's your name?
-                </Text>
+                <Text style={[styles.nameModalTitle, { color: colors.text }]}>Enter your name</Text>
                 <Text style={[styles.nameModalSubtitle, { color: colors.textMuted }]}>
-                  Enter a display name to join the game
+                  Pick the name other players will see
                 </Text>
 
                 <View style={styles.nameInputWrap}>
@@ -454,7 +446,7 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.medium,
   },
 
-  // Scanner modal styles
+  // Scanner modal styles.
   scannerContainer: {
     flex: 1,
     backgroundColor: "#000",
@@ -521,7 +513,7 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.medium,
     textAlign: "center",
   },
-  // Name modal styles — fixed to avoid input focus issues
+  // Name modal styles.
   modalOverlay: {
     flex: 1,
   },

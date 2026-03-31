@@ -15,17 +15,15 @@ import {
   applyMove,
   colorToRole,
   getAvailableDice,
-  getDieValueForMove,
+  findMatchingDieForMove,
   getValidMoves,
   initializeDiceUsed,
   markDieUsed,
-  type Bar,
-  type Board,
-  type BorneOff,
-  type DiceUsed,
   type Move,
   type PlayerRole,
 } from "@appgammon/common";
+
+/** Maps game events and actions into game-screen UI state. */
 
 export function useGameViewModel(sessionId: string | undefined, isHost: boolean) {
   const { session, lastEvent: sessionLastEvent } = useSessionEvents(sessionId);
@@ -61,22 +59,24 @@ export function useGameViewModel(sessionId: string | undefined, isHost: boolean)
   const workingState = useMemo(() => {
     if (!serverGame) return null;
 
-    let board: Board = [...serverGame.board];
-    let bar: Bar = { ...serverGame.bar };
-    let borneOff: BorneOff = { ...serverGame.borneOff };
-    let diceUsed: DiceUsed = serverGame.diceUsed
-      ? [...serverGame.diceUsed]
-      : initializeDiceUsed(serverGame.dice ?? [1, 1]);
+    const dice: [number, number] = serverGame.dice ?? [1, 1];
+    let board = [...serverGame.board];
+    let bar = { ...serverGame.bar };
+    let borneOff = { ...serverGame.borneOff };
+    let diceUsed = serverGame.diceUsed ? [...serverGame.diceUsed] : initializeDiceUsed(dice);
 
     for (const move of pendingMoves) {
+      const matchedDie = findMatchingDieForMove(board, bar, borneOff, dice, diceUsed, move, myRole);
+      if (matchedDie === null) break;
+
       const result = applyMove(board, bar, borneOff, move, myRole);
       board = result.board;
       bar = result.bar;
       borneOff = result.borneOff;
-      diceUsed = markDieUsed(serverGame.dice ?? [1, 1], diceUsed, getDieValueForMove(move, myRole));
+      diceUsed = markDieUsed(dice, diceUsed, matchedDie);
     }
 
-    return { board, bar, borneOff, diceUsed };
+    return { board, bar, borneOff, diceUsed, dice };
   }, [myRole, pendingMoves, serverGame]);
 
   const gameVersionRef = useRef<number | null>(null);
@@ -125,7 +125,7 @@ export function useGameViewModel(sessionId: string | undefined, isHost: boolean)
     try {
       await cancelSession(sessionId);
     } catch {
-      // Best-effort cancel.
+      // Ignore cancel failures.
     }
   }, [sessionId]);
 
@@ -137,9 +137,7 @@ export function useGameViewModel(sessionId: string | undefined, isHost: boolean)
   const selectPoint = useCallback(
     (pointIndex: number) => {
       if (!serverGame || !workingState || !uiGameState?.canMove) return;
-      const dice = serverGame.dice;
-      if (!dice) return;
-
+      const dice = workingState.dice;
       const available = getAvailableDice(dice, workingState.diceUsed);
       if (available.length === 0) return;
 
@@ -162,21 +160,19 @@ export function useGameViewModel(sessionId: string | undefined, isHost: boolean)
       }
 
       const move: Move = { from: selectedPoint, to: pointIndex };
-      for (const die of new Set(available)) {
-        const validMoves = getValidMoves(
-          workingState.board,
-          workingState.bar,
-          workingState.borneOff,
-          myRole,
-          die,
-        );
-        if (
-          validMoves.some((candidate) => candidate.from === move.from && candidate.to === move.to)
-        ) {
-          setPendingMoves((prev) => [...prev, move]);
-          setSelectedPoint(null);
-          return;
-        }
+      const matchedDie = findMatchingDieForMove(
+        workingState.board,
+        workingState.bar,
+        workingState.borneOff,
+        dice,
+        workingState.diceUsed,
+        move,
+        myRole,
+      );
+      if (matchedDie !== null) {
+        setPendingMoves((prev) => [...prev, move]);
+        setSelectedPoint(null);
+        return;
       }
 
       if (available.length >= 2) {
@@ -266,7 +262,7 @@ export function useGameViewModel(sessionId: string | undefined, isHost: boolean)
       try {
         await sendEmote(sessionId, emoteId);
       } catch {
-        // Best-effort, rate limiting handled server-side.
+        // Ignore send failures. The server still enforces rate limits.
       }
     },
     [playerColor, sessionId],

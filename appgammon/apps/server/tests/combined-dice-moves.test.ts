@@ -11,6 +11,7 @@ import {
   getAvailableDice,
   getValidMoves,
   getDieValueForMove,
+  findMatchingDieForMove,
   markDieUsed,
   applyMove,
   validateTurn,
@@ -266,6 +267,25 @@ describe("overshoot bear-off", () => {
       "player1",
     );
     expect(result.valid).toBe(true);
+  });
+
+  it("matches the actual overshoot die value instead of the travel distance", () => {
+    const board = bearOffBoard();
+    const dice: Dice = [6, 3];
+    const diceUsed = initializeDiceUsed(dice);
+
+    const matchedDie = findMatchingDieForMove(
+      board,
+      INITIAL_BAR,
+      INITIAL_BORNE_OFF,
+      dice,
+      diceUsed,
+      { from: 19, to: 24 },
+      "player1",
+    );
+
+    expect(getDieValueForMove({ from: 19, to: 24 }, "player1")).toBe(5);
+    expect(matchedDie).toBe(6);
   });
 
   it("rejects overshoot bear-off when higher checker exists", () => {

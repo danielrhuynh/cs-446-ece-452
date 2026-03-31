@@ -1,6 +1,4 @@
-/**
- * Back button with accessible touch target (min 44px)
- */
+/** Back button with a 44px touch target. */
 
 import { Text, StyleSheet, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";

@@ -1,7 +1,4 @@
-/**
- * Session code input component with direct paste support
- * Flex-based boxes so they scale on smaller screens
- */
+/** Session code input with paste support. */
 
 import { useRef } from "react";
 import { Text, TextInput, Pressable, StyleSheet, View } from "react-native";

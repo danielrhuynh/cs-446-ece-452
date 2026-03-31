@@ -77,14 +77,14 @@ export const gameRoutes = new Hono()
         return c.json({ error: "Only the host can start a series" }, 403);
       }
 
-      try {
-        const { best_of } = c.req.valid("json");
-        const seriesState = await gameService.startSeries(sessionId, best_of);
-        return c.json(seriesState);
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : "Failed to start series";
-        return c.json({ error: message }, 400);
+      const { best_of } = c.req.valid("json");
+      const result = await gameService.startSeries(sessionId, best_of);
+
+      if (!result.success) {
+        return c.json({ error: result.error }, (result.status ?? 400) as 400);
       }
+
+      return c.json(result.data);
     },
   )
   .get(
