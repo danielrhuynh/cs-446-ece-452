@@ -14,7 +14,7 @@ import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { Colors, Fonts, Spacing, BorderRadius, Layout, Shadows } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useDeviceId } from "@/hooks/use-device-id";
-import { joinSession } from "@/lib/api";
+import { isStaleJoinSessionError, joinSession } from "@/lib/api";
 import {
   clearActiveSession,
   clearAuthToken,
@@ -82,9 +82,11 @@ export default function HomeScreen() {
               },
             });
             return;
-          } catch {
-            await clearActiveSession();
-            await clearAuthToken();
+          } catch (error) {
+            if (isStaleJoinSessionError(error)) {
+              await clearActiveSession();
+              await clearAuthToken();
+            }
           }
         }
       }

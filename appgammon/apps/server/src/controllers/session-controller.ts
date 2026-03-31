@@ -224,51 +224,74 @@ export const sessionRoutes = new Hono()
 
     await sessionService.registerConnection(sessionId, claims.sub);
 
-    const currentSession = await sessionService.getSession(sessionId);
-    if (!currentSession) {
+    let presenceReleased = false;
+    const releasePresence = () => {
+      if (presenceReleased) return;
+      presenceReleased = true;
       sessionService.releaseConnection(sessionId, claims.sub);
-      return c.json({ error: "Session not found" }, 404);
-    }
+    };
 
-    const matchState = await matchService.getMatchState(sessionId);
-
-    return streamSSE(c, async (stream) => {
-      await stream.writeSSE({
-        event: "session_state",
-        data: JSON.stringify(currentSession),
-      });
-
-      if (matchState) {
-        await stream.writeSSE({
-          event: "match_state",
-          data: JSON.stringify(matchState),
-        });
+    try {
+      const currentSession = await sessionService.getSession(sessionId);
+      if (!currentSession) {
+        releasePresence();
+        return c.json({ error: "Session not found" }, 404);
       }
 
-      const unsubscribeSession = sessionEventBus.subscribe(sessionId, (event) => {
-        stream
-          .writeSSE({
-            event: event.type,
-            data: JSON.stringify(event.session),
-          })
-          .catch(() => {});
-      });
+      const matchState = await matchService.getMatchState(sessionId);
 
-      const unsubscribeMatch = gameEventBus.subscribe(sessionId, (event) => {
-        if (event.forPlayer && event.forPlayer !== claims.sub) return;
+      return streamSSE(c, async (stream) => {
+        let unsubscribeSession = () => {};
+        let unsubscribeMatch = () => {};
+        let streamCleanedUp = false;
+        const cleanupStream = () => {
+          if (streamCleanedUp) return;
+          streamCleanedUp = true;
+          unsubscribeSession();
+          unsubscribeMatch();
+          releasePresence();
+        };
 
-        stream
-          .writeSSE({
-            event: event.type,
-            data: JSON.stringify(event.data),
-          })
-          .catch(() => {});
-      });
+        try {
+          await stream.writeSSE({
+            event: "session_state",
+            data: JSON.stringify(currentSession),
+          });
 
-      await runSSEKeepaliveLoop(stream, () => {
-        unsubscribeSession();
-        unsubscribeMatch();
-        sessionService.releaseConnection(sessionId, claims.sub);
+          if (matchState) {
+            await stream.writeSSE({
+              event: "match_state",
+              data: JSON.stringify(matchState),
+            });
+          }
+
+          unsubscribeSession = sessionEventBus.subscribe(sessionId, (event) => {
+            stream
+              .writeSSE({
+                event: event.type,
+                data: JSON.stringify(event.session),
+              })
+              .catch(() => {});
+          });
+
+          unsubscribeMatch = gameEventBus.subscribe(sessionId, (event) => {
+            if (event.forPlayer && event.forPlayer !== claims.sub) return;
+
+            stream
+              .writeSSE({
+                event: event.type,
+                data: JSON.stringify(event.data),
+              })
+              .catch(() => {});
+          });
+
+          await runSSEKeepaliveLoop(stream, cleanupStream);
+        } finally {
+          cleanupStream();
+        }
       });
-    });
+    } catch (error) {
+      releasePresence();
+      throw error;
+    }
   });

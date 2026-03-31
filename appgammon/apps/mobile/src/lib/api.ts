@@ -36,7 +36,17 @@ const client = hc<AppType>(API_BASE_URL, {
   fetch: authFetch,
 });
 
-async function unwrap<T>(res: { ok: boolean; json(): Promise<unknown> }): Promise<T> {
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+async function unwrap<T>(res: { ok: boolean; status: number; json(): Promise<unknown> }): Promise<T> {
   let data: unknown;
   try {
     data = await res.json();
@@ -45,8 +55,9 @@ async function unwrap<T>(res: { ok: boolean; json(): Promise<unknown> }): Promis
   }
 
   if (!res.ok) {
-    throw new Error(
+    throw new ApiError(
       (data as { error?: string } | null)?.error ?? "The server returned an invalid error response",
+      res.status,
     );
   }
 
@@ -59,6 +70,10 @@ async function unwrap<T>(res: { ok: boolean; json(): Promise<unknown> }): Promis
 
 function normalizeId(sessionId: string) {
   return sessionId.toUpperCase().replace(/-/g, "");
+}
+
+export function isStaleJoinSessionError(error: unknown) {
+  return error instanceof ApiError && error.status === 400;
 }
 
 // ── Session response types ──
