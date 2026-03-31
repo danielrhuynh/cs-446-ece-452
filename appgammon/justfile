@@ -1,4 +1,4 @@
-export TURBO_TELEMETRY_DISABLED := 1
+export TURBO_TELEMETRY_DISABLED := "1"
 
 default: dev
 
@@ -17,21 +17,21 @@ typecheck:
 lint:
     pnpm lint
 
-[group("db")]
 [doc("setup postgres instance for local dev")]
+[group("db")]
 db-up:
     docker compose -f docker-compose.yaml up -d
     @echo "Waiting for Postgres to be ready..."
     @until docker exec appgammon-db pg_isready -U appgammon > /dev/null 2>&1; do sleep 0.5; done
     @echo "Postgres is ready."
 
-[group("db")]
 [doc("shutdown local dev")]
+[group("db")]
 db-down:
     docker compose -f docker-compose.yaml down
 
-[group("db")]
 [doc("fully reset postgress db")]
+[group("db")]
 db-reset:
     docker compose -f docker-compose.yaml down -v
     just db-up db-migrate
