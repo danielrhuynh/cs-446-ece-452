@@ -4,7 +4,7 @@ import { Pool } from "pg";
 import * as schema from "./schema";
 import dotenv from "dotenv";
 
-dotenv.config({ path: path.resolve(__dirname, "../../.env"), override: false });
+dotenv.config({ path: path.resolve(__dirname, "../../.env"), override: false, quiet: true });
 
 const host = process.env.DB_HOST || "localhost";
 const isLocalhost = host === "localhost" || host === "127.0.0.1";

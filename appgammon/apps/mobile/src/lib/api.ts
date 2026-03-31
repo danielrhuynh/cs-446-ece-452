@@ -150,6 +150,7 @@ export async function proposeDouble(sessionId: string, gameId: string) {
   const id = normalizeId(sessionId);
   const res = await authFetch(
     `${API_BASE_URL}/games/${id}/double?action=propose&game_id=${gameId}`,
+    { method: "POST" },
   );
   return unwrap<{ ok: true }>(res);
 }
@@ -162,18 +163,23 @@ export async function respondToDouble(
   const id = normalizeId(sessionId);
   const res = await authFetch(
     `${API_BASE_URL}/games/${id}/double?action=${action}&game_id=${gameId}`,
+    { method: "POST" },
   );
   return unwrap<{ ok: true }>(res);
 }
 
 export async function rollDice(sessionId: string, gameId: string) {
   const id = normalizeId(sessionId);
-  const res = await authFetch(`${API_BASE_URL}/games/${id}/roll?game_id=${gameId}`);
+  const res = await authFetch(`${API_BASE_URL}/games/${id}/roll?game_id=${gameId}`, {
+    method: "POST",
+  });
   return unwrap<{ ok: true }>(res);
 }
 
 export async function sendEmote(sessionId: string, emoteId: string) {
   const id = normalizeId(sessionId);
-  const res = await authFetch(`${API_BASE_URL}/games/${id}/emote?id=${emoteId}`);
+  const res = await authFetch(`${API_BASE_URL}/games/${id}/emote?id=${emoteId}`, {
+    method: "POST",
+  });
   return unwrap<{ ok: true }>(res);
 }

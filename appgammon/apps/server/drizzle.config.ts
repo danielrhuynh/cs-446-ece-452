@@ -2,7 +2,7 @@ import path from "node:path";
 import { defineConfig } from "drizzle-kit";
 import { config } from "dotenv";
 
-config({ path: path.resolve(__dirname, ".env") });
+config({ path: path.resolve(__dirname, ".env"), quiet: true });
 
 const connString = process.env.DB_CONN_STRING!;
 const parsed = new URL(connString);

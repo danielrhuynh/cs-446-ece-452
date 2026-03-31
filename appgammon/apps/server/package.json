@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx watch --include 'src/**/*.ts' --include '../../packages/common/src/**/*.ts' src/index.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
