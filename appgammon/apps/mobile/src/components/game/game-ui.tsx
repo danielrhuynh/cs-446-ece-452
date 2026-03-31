@@ -51,6 +51,11 @@ function ScoreEmoteToast({
   const colorScheme = useColorScheme() ?? "light";
   const colors = Colors[colorScheme];
   const [visibleEmote, setVisibleEmote] = useState<LastEmote | null>(null);
+  const whiteBubbleColor =
+    colorScheme === "light" ? "rgba(250,247,242,0.9)" : "rgba(28,25,23,0.88)";
+  const redBubbleColor =
+    colorScheme === "light" ? "rgba(231,111,81,0.84)" : "rgba(244,132,95,0.82)";
+  const whiteBubbleTextColor = colorScheme === "light" ? "#1C1917" : colors.onPrimary;
 
   useEffect(() => {
     if (!lastEmote || !showEmotes) {
@@ -87,11 +92,14 @@ function ScoreEmoteToast({
                 styles.eventBubble,
                 Shadows.sm,
                 {
-                  backgroundColor: colors.primary,
+                  backgroundColor: whiteBubbleColor,
+                  borderColor: colors.glassBorder,
                 },
               ]}
             >
-              <Text style={[styles.eventLabel, { color: colors.onPrimary }]}>{emote.label}</Text>
+              <Text style={[styles.eventLabel, { color: whiteBubbleTextColor }]}>
+                {emote.label}
+              </Text>
             </View>
           </Animated.View>
         )}
@@ -109,7 +117,8 @@ function ScoreEmoteToast({
                 styles.eventBubble,
                 Shadows.sm,
                 {
-                  backgroundColor: colors.accent,
+                  backgroundColor: redBubbleColor,
+                  borderColor: colors.glassBorder,
                 },
               ]}
             >
@@ -151,7 +160,6 @@ export function GameUI({
 
   return (
     <View style={styles.container}>
-      {/* Score */}
       <View style={styles.scoreWrap}>
         <View style={styles.scoreRow}>
           <View style={styles.scoreItem}>
@@ -170,17 +178,20 @@ export function GameUI({
             </Text>
           </View>
         </View>
-        <ScoreEmoteToast lastEmote={gameState.lastEmote} showEmotes={showEmotes} />
       </View>
 
-      {/* Board */}
-      <BackgammonBoard
-        board={gameState.board}
-        playerColor={playerColor}
-        onPointPress={onPointPress}
-        selectedPoint={selectedPoint}
-        hintedDestinations={hintedDestinations}
-      />
+      <View style={styles.boardWrap}>
+        <BackgammonBoard
+          board={gameState.board}
+          playerColor={playerColor}
+          onPointPress={onPointPress}
+          selectedPoint={selectedPoint}
+          hintedDestinations={hintedDestinations}
+        />
+        <View style={styles.emoteOverlayWrap} pointerEvents="none">
+          <ScoreEmoteToast lastEmote={gameState.lastEmote} showEmotes={showEmotes} />
+        </View>
+      </View>
 
       {/* Controls */}
       <View style={styles.controlsBlock}>
@@ -262,6 +273,11 @@ const styles = StyleSheet.create({
     position: "relative",
     marginBottom: Spacing.md,
   },
+  boardWrap: {
+    width: "100%",
+    alignItems: "center",
+    position: "relative",
+  },
   scoreItem: {
     flexDirection: "row",
     alignItems: "center",
@@ -286,11 +302,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: Fonts.medium,
   },
+  emoteOverlayWrap: {
+    position: "absolute",
+    top: -44,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+  },
   eventOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    width: "100%",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    minHeight: 36,
+    paddingHorizontal: Spacing.xs,
   },
   eventSlot: {
     flex: 1,
@@ -303,11 +328,13 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
   },
   toastWrap: {
-    transform: [{ translateY: -28 }],
+    minHeight: 36,
+    justifyContent: "center",
   },
   eventBubble: {
     minWidth: 44,
     borderRadius: BorderRadius.full,
+    borderWidth: 1,
     paddingHorizontal: Spacing.md,
     paddingVertical: 6,
   },
