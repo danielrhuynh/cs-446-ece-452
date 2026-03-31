@@ -38,12 +38,8 @@ yarn-error.*
 
 # typescript
 *.tsbuildinfo
-
-app-example
+.turbo
 
 # generated native folders
 ios/
 android/
-
-# server build
-server/dist/

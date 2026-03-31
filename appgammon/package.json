@@ -2,12 +2,21 @@
   "name": "appgammon-monorepo",
   "private": true,
   "scripts": {
-    "dev": "pnpm --parallel --stream --filter mobile --filter server run dev",
-    "lint": "pnpm --filter mobile run lint",
-    "typecheck": "pnpm --filter mobile run typecheck && pnpm --filter server run typecheck",
-    "test": "pnpm --filter server run test",
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
     "mobile": "pnpm --filter mobile",
     "server": "pnpm --filter server",
-    "dev:remote": "bash scripts/remote-dev.sh"
-  }
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "fmt": "oxfmt",
+    "fmt:check": "oxfmt --check"
+  },
+  "devDependencies": {
+    "oxfmt": "^0.43.0",
+    "oxlint": "^1.58.0",
+    "turbo": "^2.9.1"
+  },
+  "packageManager": "pnpm@10.32.1"
 }

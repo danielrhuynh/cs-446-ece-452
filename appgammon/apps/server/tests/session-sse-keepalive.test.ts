@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { runSSEKeepaliveLoop } from "../controllers/session-controller";
+import { runSSEKeepaliveLoop } from "../src/controllers/session-controller";
 
 describe("runSSEKeepaliveLoop", () => {
   it("stops and unsubscribes when the stream aborts", async () => {

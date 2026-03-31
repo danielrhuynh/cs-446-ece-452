@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { sign } from "hono/jwt";
-import app from "../app";
+import app from "../src/app";
 
 const TEST_SECRET = "test-secret";
 

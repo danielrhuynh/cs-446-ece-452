@@ -1,49 +1,49 @@
+export TURBO_TELEMETRY_DISABLED := 1
+
 default: dev
 
 dev: db-up db-migrate
     pnpm dev
 
-ios: db-up db-migrate
-    pnpm --filter server run dev & pnpm --filter mobile run ios & wait
+[group("tools")]
+test:
+    pnpm test
 
+[group("tools")]
+typecheck:
+    pnpm typecheck
+
+[group("tools")]
+lint:
+    pnpm lint
+
+[group("db")]
+[doc("setup postgres instance for local dev")]
 db-up:
-    docker compose -f apps/server/docker/docker-compose.yaml up -d
+    docker compose -f docker-compose.yaml up -d
     @echo "Waiting for Postgres to be ready..."
     @until docker exec appgammon-db pg_isready -U appgammon > /dev/null 2>&1; do sleep 0.5; done
     @echo "Postgres is ready."
 
+[group("db")]
+[doc("shutdown local dev")]
 db-down:
-    docker compose -f apps/server/docker/docker-compose.yaml down
+    docker compose -f docker-compose.yaml down
 
+[group("db")]
+[doc("fully reset postgress db")]
 db-reset:
-    docker compose -f apps/server/docker/docker-compose.yaml down -v
+    docker compose -f docker-compose.yaml down -v
     just db-up db-migrate
 
+[group("db")]
 db-migrate:
     pnpm --filter server run db:migrate
 
+[group("db")]
 db-generate:
     pnpm --filter server run db:generate
 
+[group("db")]
 db-studio:
     pnpm --filter server run db:studio
-
-# Spin up just the server + DB (no mobile app)
-sandbox: db-up db-migrate
-    pnpm --filter server run dev
-
-# Fresh sandbox: wipe DB, re-migrate, start server
-sandbox-fresh: db-reset
-    pnpm --filter server run dev
-
-remote: db-up db-migrate
-    bash scripts/remote-dev.sh
-
-test:
-    pnpm test
-
-typecheck:
-    pnpm typecheck
-
-lint:
-    pnpm lint

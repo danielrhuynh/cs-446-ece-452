@@ -20,7 +20,7 @@ import {
 // Board where player1 has checkers on points 0, 5, 11 with clear paths forward.
 // Player1 moves 0→23.
 function openBoard(): Board {
-  const board: Board = new Array(24).fill(0);
+  const board: Board = Array.from({ length: 24 }, () => 0);
   board[0] = 2;
   board[5] = 3;
   board[11] = 5;
@@ -47,7 +47,7 @@ function findCombinedMove(
   const available = getAvailableDice(dice, diceUsed);
   if (available.length < 2) return null;
 
-  const uniqueDice = [...new Set(available)];
+  const uniqueDice = new Set(available);
   for (const die1 of uniqueDice) {
     const firstMoves = getValidMoves(board, bar, borneOff, role, die1);
     for (const firstMove of firstMoves) {
@@ -55,11 +55,9 @@ function findCombinedMove(
       const after = applyMove(board, bar, borneOff, firstMove, role);
       const updatedDiceUsed = markDieUsed(dice, diceUsed, die1);
       const remaining = getAvailableDice(dice, updatedDiceUsed);
-      for (const die2 of [...new Set(remaining)]) {
+      for (const die2 of new Set(remaining)) {
         const secondMoves = getValidMoves(after.board, after.bar, after.borneOff, role, die2);
-        const secondMove = secondMoves.find(
-          (m) => m.from === firstMove.to && m.to === destination,
-        );
+        const secondMove = secondMoves.find((m) => m.from === firstMove.to && m.to === destination);
         if (secondMove) {
           return [firstMove, secondMove];
         }
@@ -76,12 +74,22 @@ describe("combined dice moves", () => {
     const diceUsed = initializeDiceUsed(dice);
 
     // Player1 at point 0, tap point 5 (distance 5 = 2+3)
-    const result = findCombinedMove(board, INITIAL_BAR, INITIAL_BORNE_OFF, dice, diceUsed, 0, 5, "player1");
+    const result = findCombinedMove(
+      board,
+      INITIAL_BAR,
+      INITIAL_BORNE_OFF,
+      dice,
+      diceUsed,
+      0,
+      5,
+      "player1",
+    );
 
     expect(result).not.toBeNull();
     expect(result).toHaveLength(2);
     // Should route through either 0→2→5 or 0→3→5
-    const totalDistance = getDieValueForMove(result![0], "player1") + getDieValueForMove(result![1], "player1");
+    const totalDistance =
+      getDieValueForMove(result![0], "player1") + getDieValueForMove(result![1], "player1");
     expect(totalDistance).toBe(5);
     expect(result![0].from).toBe(0);
     expect(result![1].to).toBe(5);
@@ -97,7 +105,15 @@ describe("combined dice moves", () => {
       { from: 0, to: 2 },
       { from: 2, to: 5 },
     ];
-    const result = validateTurn(board, INITIAL_BAR, INITIAL_BORNE_OFF, dice, diceUsed, moves, "player1");
+    const result = validateTurn(
+      board,
+      INITIAL_BAR,
+      INITIAL_BORNE_OFF,
+      dice,
+      diceUsed,
+      moves,
+      "player1",
+    );
     expect(result.valid).toBe(true);
   });
 
@@ -110,7 +126,15 @@ describe("combined dice moves", () => {
       { from: 0, to: 3 },
       { from: 3, to: 5 },
     ];
-    const result = validateTurn(board, INITIAL_BAR, INITIAL_BORNE_OFF, dice, diceUsed, moves, "player1");
+    const result = validateTurn(
+      board,
+      INITIAL_BAR,
+      INITIAL_BORNE_OFF,
+      dice,
+      diceUsed,
+      moves,
+      "player1",
+    );
     expect(result.valid).toBe(true);
   });
 
@@ -122,7 +146,16 @@ describe("combined dice moves", () => {
     const diceUsed = initializeDiceUsed(dice);
 
     // 0→2 is blocked, so must go 0→3→5
-    const result = findCombinedMove(board, INITIAL_BAR, INITIAL_BORNE_OFF, dice, diceUsed, 0, 5, "player1");
+    const result = findCombinedMove(
+      board,
+      INITIAL_BAR,
+      INITIAL_BORNE_OFF,
+      dice,
+      diceUsed,
+      0,
+      5,
+      "player1",
+    );
 
     expect(result).not.toBeNull();
     expect(result![0]).toEqual({ from: 0, to: 3 });
@@ -137,7 +170,16 @@ describe("combined dice moves", () => {
     const dice: Dice = [2, 3];
     const diceUsed = initializeDiceUsed(dice);
 
-    const result = findCombinedMove(board, INITIAL_BAR, INITIAL_BORNE_OFF, dice, diceUsed, 0, 5, "player1");
+    const result = findCombinedMove(
+      board,
+      INITIAL_BAR,
+      INITIAL_BORNE_OFF,
+      dice,
+      diceUsed,
+      0,
+      5,
+      "player1",
+    );
     expect(result).toBeNull();
   });
 
@@ -147,7 +189,16 @@ describe("combined dice moves", () => {
     const diceUsed = initializeDiceUsed(dice); // [false, false, false, false]
 
     // Player1 at point 0, tap point 6
-    const result = findCombinedMove(board, INITIAL_BAR, INITIAL_BORNE_OFF, dice, diceUsed, 0, 6, "player1");
+    const result = findCombinedMove(
+      board,
+      INITIAL_BAR,
+      INITIAL_BORNE_OFF,
+      dice,
+      diceUsed,
+      0,
+      6,
+      "player1",
+    );
 
     expect(result).not.toBeNull();
     expect(result).toHaveLength(2);
@@ -185,7 +236,7 @@ describe("combined dice moves", () => {
 describe("overshoot bear-off", () => {
   // All player1 checkers in home board (18-23), can bear off
   function bearOffBoard(): Board {
-    const board: Board = new Array(24).fill(0);
+    const board: Board = Array.from({ length: 24 }, () => 0);
     board[19] = 3; // 5 away from bearing off
     board[20] = 4; // 4 away
     board[22] = 5; // 2 away
@@ -205,12 +256,20 @@ describe("overshoot bear-off", () => {
       { from: 19, to: 24 }, // overshoot bear-off with die 6
       { from: 20, to: 23 }, // normal move with die 3
     ];
-    const result = validateTurn(board, INITIAL_BAR, INITIAL_BORNE_OFF, dice, diceUsed, moves, "player1");
+    const result = validateTurn(
+      board,
+      INITIAL_BAR,
+      INITIAL_BORNE_OFF,
+      dice,
+      diceUsed,
+      moves,
+      "player1",
+    );
     expect(result.valid).toBe(true);
   });
 
   it("rejects overshoot bear-off when higher checker exists", () => {
-    const board: Board = new Array(24).fill(0);
+    const board: Board = Array.from({ length: 24 }, () => 0);
     board[18] = 1; // furthest checker (6 away)
     board[20] = 3; // 4 away
     board[23] = 3; // 1 away
@@ -222,7 +281,15 @@ describe("overshoot bear-off", () => {
       { from: 20, to: 24 },
       { from: 23, to: 24 },
     ];
-    const result = validateTurn(board, INITIAL_BAR, INITIAL_BORNE_OFF, dice, diceUsed, moves, "player1");
+    const result = validateTurn(
+      board,
+      INITIAL_BAR,
+      INITIAL_BORNE_OFF,
+      dice,
+      diceUsed,
+      moves,
+      "player1",
+    );
     expect(result.valid).toBe(false);
   });
 
@@ -235,14 +302,22 @@ describe("overshoot bear-off", () => {
       { from: 19, to: 24 }, // exact bear-off with die 5
       { from: 22, to: 24 }, // exact bear-off with die 2
     ];
-    const result = validateTurn(board, INITIAL_BAR, INITIAL_BORNE_OFF, dice, diceUsed, moves, "player1");
+    const result = validateTurn(
+      board,
+      INITIAL_BAR,
+      INITIAL_BORNE_OFF,
+      dice,
+      diceUsed,
+      moves,
+      "player1",
+    );
     expect(result.valid).toBe(true);
   });
 });
 
 describe("auto-skip turn (no legal moves)", () => {
   it("detects no legal moves when bar entry is fully blocked", () => {
-    const board: Board = new Array(24).fill(0);
+    const board: Board = Array.from({ length: 24 }, () => 0);
     // Player2 blocks all 6 entry points for player1 (points 0-5)
     board[0] = -2;
     board[1] = -2;
@@ -261,7 +336,7 @@ describe("auto-skip turn (no legal moves)", () => {
   });
 
   it("detects legal move when one bar entry point is open", () => {
-    const board: Board = new Array(24).fill(0);
+    const board: Board = Array.from({ length: 24 }, () => 0);
     board[0] = -2;
     board[1] = -2;
     board[2] = 0; // point 2 is open, die value 3 enters here
@@ -278,7 +353,7 @@ describe("auto-skip turn (no legal moves)", () => {
   });
 
   it("validates empty move submission when no moves possible", () => {
-    const board: Board = new Array(24).fill(0);
+    const board: Board = Array.from({ length: 24 }, () => 0);
     board[0] = -2;
     board[1] = -2;
     board[2] = -2;
