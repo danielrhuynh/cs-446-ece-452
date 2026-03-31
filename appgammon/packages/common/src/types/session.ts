@@ -1,15 +1,15 @@
+import type { MatchEventType } from "./game";
+
 export enum session_status {
   open = "open",
-  closed = "closed",
-  in_game = "in_game",
+  ready = "ready",
   cancelled = "cancelled",
 }
 
-export type SessionEventType =
-  | "session_state"
-  | "player_joined"
-  | "game_started"
-  | "session_cancelled";
+export type SessionRole = "host" | "guest";
+
+export type SessionEventType = "session_state" | "session_ready" | "session_cancelled";
+export type RoomEventType = SessionEventType | MatchEventType;
 
 export interface PlayerInfo {
   id: string;
@@ -18,9 +18,12 @@ export interface PlayerInfo {
 
 export interface SessionWithPlayers {
   id: string;
-  status: string;
+  status: session_status;
   player_1_id: string;
   player_2_id: string | null;
+  player_1_connected: boolean;
+  player_2_connected: boolean;
+  reconnect_deadline_at: string | null;
   created_at: string;
   player_1: PlayerInfo;
   player_2: PlayerInfo | null;

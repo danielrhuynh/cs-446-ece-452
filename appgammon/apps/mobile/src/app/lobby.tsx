@@ -16,13 +16,27 @@ import Animated, {
 } from "react-native-reanimated";
 import { Colors, Fonts, Spacing, BorderRadius, Layout, Shadows } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { useSessionEvents } from "@/hooks/use-session-events";
-import { cancelSession, startGame, startSeries, syncGame } from "@/lib/api";
+import { useRoomEvents } from "@/hooks/use-room-events";
+import { cancelSession, startMatch } from "@/lib/api";
+import { clearActiveSession, clearAuthToken, setActiveSession } from "@/lib/storage";
 import { Button } from "@/components/ui/button";
 import { LiquidGlass } from "@/components/ui/liquid-glass";
 import { ScreenContainer } from "@/components/ui/screen-container";
 import { BackButton } from "@/components/ui/back-button";
 import { LoadingCard } from "@/components/ui/loading-card";
+import { SessionShareCard } from "@/components/ui/session-share-card";
+
+function formatReconnectCountdown(deadline: string | null, now: number) {
+  if (!deadline) return "Waiting for them to reconnect.";
+
+  const remainingMs = Math.max(0, new Date(deadline).getTime() - now);
+  const minutes = Math.floor(remainingMs / 60_000);
+  const seconds = Math.floor((remainingMs % 60_000) / 1000);
+
+  return remainingMs > 0
+    ? `${minutes}:${String(seconds).padStart(2, "0")} left in the grace window`
+    : "Grace window elapsed. You can still wait or leave the session.";
+}
 
 /* Status dot. */
 function PulsingStatusDot({ color }: { color: string }) {
@@ -70,60 +84,65 @@ function EmptyAvatar({ borderColor }: { borderColor: string }) {
 /* Session status labels. */
 const STATUS_LABELS: Record<string, string> = {
   open: "Waiting for opponent",
-  closed: "Ready to start",
-  in_game: "Game in progress",
+  ready: "Ready to start",
   cancelled: "Session cancelled",
 };
 
 /* Screen component. */
 export default function LobbyScreen() {
   const router = useRouter();
-  const { sessionId, isHost, displayName, bestOf } = useLocalSearchParams<{
+  const { sessionId, isHost, displayName, targetScore } = useLocalSearchParams<{
     sessionId: string;
     isHost: string;
     displayName: string;
-    bestOf?: string;
+    targetScore?: string;
   }>();
   const colorScheme = useColorScheme() ?? "light";
   const colors = Colors[colorScheme];
   const isHostBool = isHost === "true";
 
-  const { session, lastEvent } = useSessionEvents(sessionId);
+  const { session, matchState, lastSessionEvent } = useRoomEvents(sessionId);
   const [isStarting, setIsStarting] = useState(false);
   const [score, setScore] = useState({ player1: 0, player2: 0 });
+  const [now, setNow] = useState(() => Date.now());
   const navigatedRef = useRef(false);
 
-  // Load the current series score when available.
   useEffect(() => {
-    if (!sessionId) return;
-    void syncGame(sessionId)
-      .then((state) => {
-        if (state) {
-          setScore({ player1: state.player1Score, player2: state.player2Score });
-        }
-      })
-      .catch(() => {
-        /* No active series yet. */
-      });
-  }, [sessionId]);
+    if (!matchState) return;
+    setScore({ player1: matchState.player1Score, player2: matchState.player2Score });
+  }, [matchState]);
 
   useEffect(() => {
     if (navigatedRef.current) return;
-    if (lastEvent === "session_cancelled" || session?.status === "cancelled") {
+    if (lastSessionEvent === "session_cancelled" || session?.status === "cancelled") {
+      void clearActiveSession();
+      void clearAuthToken();
       navigatedRef.current = true;
       router.replace("/");
       return;
     }
-    if (session && (lastEvent === "game_started" || session.status === "in_game")) {
+    if (matchState?.currentGame) {
       navigatedRef.current = true;
       router.replace({
         pathname: "/game",
-        params: { sessionId: session.id, isHost: isHostBool ? "true" : "false" },
+        params: { sessionId, isHost: isHostBool ? "true" : "false" },
       });
     }
-  }, [isHostBool, lastEvent, session, router]);
+  }, [isHostBool, lastSessionEvent, matchState, router, session, sessionId]);
+
+  useEffect(() => {
+    if (!sessionId || !displayName) return;
+
+    void setActiveSession({
+      sessionId,
+      displayName,
+      isHost: isHostBool,
+      targetScore: Number(targetScore) || null,
+    });
+  }, [displayName, isHostBool, sessionId, targetScore]);
 
   const doLeave = useCallback(async () => {
+    await clearActiveSession();
     if (sessionId) {
       try {
         await cancelSession(sessionId);
@@ -131,6 +150,7 @@ export default function LobbyScreen() {
         /* best-effort */
       }
     }
+    await clearAuthToken();
     router.replace("/");
   }, [router, sessionId]);
 
@@ -145,26 +165,44 @@ export default function LobbyScreen() {
     ]);
   }, [doLeave]);
 
-  const bestOfNum = Number(bestOf) || 3;
+  const targetScoreNum = Number(targetScore) || 3;
 
-  const handleStartGame = useCallback(async () => {
+  const handleStartMatch = useCallback(async () => {
     if (!session?.player_2 || !sessionId) {
       Alert.alert("Cannot Start", "Waiting for an opponent to join.");
       return;
     }
     setIsStarting(true);
     try {
-      await startSeries(sessionId, bestOfNum);
-      await startGame(sessionId);
+      await startMatch(sessionId, targetScoreNum);
     } catch (err) {
       Alert.alert("Error", err instanceof Error ? err.message : "Failed to start game");
     } finally {
       setIsStarting(false);
     }
-  }, [session, sessionId, bestOfNum]);
+  }, [session, sessionId, targetScoreNum]);
 
-  const opponentJoined = session?.player_2 != null;
-  const statusText = session ? (STATUS_LABELS[session.status] ?? session.status) : "";
+  const opponentPresent = !session ? false : isHostBool ? session.player_2 != null : true;
+  const opponentConnected = !session
+    ? false
+    : isHostBool
+      ? !!session.player_2 && session.player_2_connected
+      : session.player_1_connected;
+  const opponentDisconnected = opponentPresent && !opponentConnected;
+  const opponentJoined = opponentPresent && opponentConnected;
+  const hostConnected = session?.player_1_connected ?? false;
+  const statusText = opponentDisconnected
+    ? "Opponent reconnecting"
+    : session
+      ? (STATUS_LABELS[session.status] ?? session.status)
+      : "";
+
+  useEffect(() => {
+    if (!opponentDisconnected) return;
+
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [opponentDisconnected]);
 
   const youTag = (name: string | null | undefined) => (name === displayName ? " (You)" : "");
 
@@ -209,7 +247,7 @@ export default function LobbyScreen() {
           <LiquidGlass style={[styles.vsCard, Shadows.sm]}>
             <View
               style={styles.playerRow}
-              accessibilityLabel={`Player 1: ${session.player_1?.name || "Host"}, Host, Ready`}
+              accessibilityLabel={`Player 1: ${session.player_1?.name || "Host"}, Host, ${hostConnected ? "Ready" : "Reconnecting"}`}
             >
               <View style={[styles.avatar, { backgroundColor: colors.hostBadge }]}>
                 <Text style={styles.avatarLetter}>
@@ -224,8 +262,13 @@ export default function LobbyScreen() {
                   Host{youTag(session.player_1?.name)}
                 </Text>
               </View>
-              <View style={[styles.badge, { backgroundColor: colors.hostBadge }]}>
-                <Text style={styles.badgeText}>Ready</Text>
+              <View
+                style={[
+                  styles.badge,
+                  { backgroundColor: hostConnected ? colors.hostBadge : colors.accent },
+                ]}
+              >
+                <Text style={styles.badgeText}>{hostConnected ? "Ready" : "Reconnecting"}</Text>
               </View>
             </View>
 
@@ -241,7 +284,7 @@ export default function LobbyScreen() {
               <Animated.View
                 entering={FadeInUp.duration(400)}
                 style={styles.playerRow}
-                accessibilityLabel={`Player 2: ${session.player_2.name || "Player 2"}, Challenger, Joined`}
+                accessibilityLabel={`Player 2: ${session.player_2.name || "Player 2"}, Challenger, ${session.player_2_connected ? "Joined" : "Reconnecting"}`}
               >
                 <View style={[styles.avatar, { backgroundColor: colors.joinedBadge }]}>
                   <Text style={styles.avatarLetter}>
@@ -256,8 +299,19 @@ export default function LobbyScreen() {
                     Challenger{youTag(session.player_2.name)}
                   </Text>
                 </View>
-                <View style={[styles.badge, { backgroundColor: colors.joinedBadge }]}>
-                  <Text style={styles.badgeText}>Joined</Text>
+                <View
+                  style={[
+                    styles.badge,
+                    {
+                      backgroundColor: session.player_2_connected
+                        ? colors.joinedBadge
+                        : colors.accent,
+                    },
+                  ]}
+                >
+                  <Text style={styles.badgeText}>
+                    {session.player_2_connected ? "Joined" : "Reconnecting"}
+                  </Text>
                 </View>
               </Animated.View>
             ) : (
@@ -300,34 +354,63 @@ export default function LobbyScreen() {
           </LiquidGlass>
         </Animated.View>
 
+        {!opponentJoined ? (
+          <Animated.View
+            entering={FadeInDown.delay(120).duration(300)}
+            style={styles.reconnectWrap}
+          >
+            <LiquidGlass style={[styles.reconnectCard, Shadows.sm]}>
+              <Text style={[styles.reconnectTitle, { color: colors.text }]}>
+                {opponentDisconnected ? "Waiting for them to reconnect" : "Invite is still active"}
+              </Text>
+              <Text style={[styles.reconnectBody, { color: colors.textMuted }]}>
+                {opponentDisconnected
+                  ? formatReconnectCountdown(session.reconnect_deadline_at, now)
+                  : "Keep this session open while they join from the original device."}
+              </Text>
+              <SessionShareCard sessionId={session.id} />
+            </LiquidGlass>
+          </Animated.View>
+        ) : null}
+
         <View style={{ flex: 1 }} />
 
         <Animated.View entering={FadeInDown.delay(160).duration(300)} style={styles.actionWrap}>
           {isHostBool ? (
             <>
               <Button
-                title={isStarting ? "Starting..." : "Start Game"}
+                title={isStarting ? "Starting..." : "Start Match"}
                 variant={opponentJoined ? "primary" : "outline"}
                 size="lg"
                 fullWidth
-                disabled={!opponentJoined || isStarting}
-                onPress={() => void handleStartGame()}
+                disabled={!opponentJoined || opponentDisconnected || isStarting}
+                onPress={() => void handleStartMatch()}
                 accessibilityLabel={
-                  opponentJoined ? "Start the game" : "Start game (waiting for opponent)"
+                  opponentJoined ? "Start the match" : "Start match (waiting for opponent)"
                 }
-                accessibilityState={{ disabled: !opponentJoined || isStarting }}
+                accessibilityState={{
+                  disabled: !opponentJoined || opponentDisconnected || isStarting,
+                }}
               />
               {!opponentJoined && (
                 <Text style={[styles.hintText, { color: colors.textMuted }]}>
-                  An opponent must join before you can start
+                  {opponentDisconnected
+                    ? "The match stays paused until they reconnect."
+                    : "An opponent must join before you can start"}
                 </Text>
               )}
             </>
+          ) : opponentDisconnected ? (
+            <LiquidGlass style={styles.waitHostCard}>
+              <Text style={[styles.waitHostText, { color: colors.textMuted }]}>
+                Host is reconnecting. You can wait here or leave the session.
+              </Text>
+            </LiquidGlass>
           ) : (
             <LiquidGlass style={styles.waitHostCard}>
               <ActivityIndicator size="small" color={colors.primary} />
               <Text style={[styles.waitHostText, { color: colors.textMuted }]}>
-                Waiting for host to start the game...
+                Waiting for host to start the match...
               </Text>
             </LiquidGlass>
           )}
@@ -408,6 +491,11 @@ const styles = StyleSheet.create({
   scoreCenter: { flexDirection: "row", alignItems: "center", gap: 6 },
   scoreNum: { fontSize: 26, fontFamily: Fonts.display, minWidth: 24, textAlign: "center" },
   scoreSep: { fontSize: 22, fontFamily: Fonts.bold },
+
+  reconnectWrap: { width: "100%", maxWidth: Layout.contentMaxWidth, alignSelf: "center" },
+  reconnectCard: { padding: Spacing.md, borderRadius: BorderRadius.lg, gap: Spacing.sm },
+  reconnectTitle: { fontSize: 18, fontFamily: Fonts.semibold },
+  reconnectBody: { fontSize: 14, fontFamily: Fonts.medium, lineHeight: 20 },
 
   /* Action */
   actionWrap: {

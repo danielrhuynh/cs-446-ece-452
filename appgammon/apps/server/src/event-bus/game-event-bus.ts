@@ -1,16 +1,28 @@
-import type { GameEvent } from "../utils/game-events";
-import { publishGame, subscribeGame } from "../utils/game-events";
+import type { MatchEventType } from "@appgammon/common";
+import { ChannelSubject } from "./channel-subject";
+
+export interface GameEvent {
+  type: MatchEventType;
+  data: unknown;
+  /** If set, only deliver to this player ID. */
+  forPlayer?: string;
+}
 
 export interface GameEventBus {
   publish(sessionId: string, event: GameEvent): void;
-  subscribe(sessionId: string, callback: (event: GameEvent) => void): () => void;
+  subscribe(sessionId: string, callback: (event: GameEvent) => void | Promise<void>): () => void;
 }
 
-export const gameEventBus: GameEventBus = {
-  publish(sessionId, event) {
-    publishGame(sessionId, event);
-  },
-  subscribe(sessionId, callback) {
-    return subscribeGame(sessionId, callback);
-  },
-};
+class InMemoryGameEventBus implements GameEventBus {
+  private readonly subject = new ChannelSubject<GameEvent>();
+
+  publish(sessionId: string, event: GameEvent): void {
+    this.subject.notify(sessionId, event);
+  }
+
+  subscribe(sessionId: string, callback: (event: GameEvent) => void | Promise<void>): () => void {
+    return this.subject.attach(sessionId, { update: callback });
+  }
+}
+
+export const gameEventBus: GameEventBus = new InMemoryGameEventBus();

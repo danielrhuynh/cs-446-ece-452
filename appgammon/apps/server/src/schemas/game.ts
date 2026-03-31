@@ -1,18 +1,14 @@
-/**
- * Zod validation schemas for game endpoints.
- */
-
 import { z } from "zod";
 import { EMOTES } from "@appgammon/common";
 
-const emoteIds = EMOTES.map((e) => e.id) as [string, ...string[]];
+const emoteIds = EMOTES.map((e) => e.id);
+export const emoteIdSchema = z.enum(emoteIds);
 
-export const startSeriesPayloadSchema = z.object({
-  best_of: z.union([z.literal(1), z.literal(3), z.literal(5), z.literal(7)]),
+export const startMatchPayloadSchema = z.object({
+  target_score: z.union([z.literal(1), z.literal(3), z.literal(5), z.literal(7)]),
 });
 
 export const submitMovesPayloadSchema = z.object({
-  game_id: z.string().uuid(),
   version: z.number().int().positive(),
   moves: z.array(
     z.object({
@@ -23,5 +19,5 @@ export const submitMovesPayloadSchema = z.object({
 });
 
 export const doubleActionSchema = z.enum(["propose", "accept", "decline"]);
-
-export const emoteIdSchema = z.enum(emoteIds);
+export const doubleActionPayloadSchema = z.object({ action: doubleActionSchema });
+export const emotePayloadSchema = z.object({ emote_id: emoteIdSchema });

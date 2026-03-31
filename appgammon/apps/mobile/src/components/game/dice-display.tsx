@@ -6,6 +6,7 @@
 import { useEffect } from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import Animated, {
+  interpolate,
   useAnimatedStyle,
   useSharedValue,
   withSequence,
@@ -17,7 +18,10 @@ import { LiquidGlass } from "@/components/ui/liquid-glass";
 
 interface DiceDisplayProps {
   dice: [number, number] | null;
+  diceUsed?: boolean[] | null;
   canRoll?: boolean;
+  canSubmit?: boolean;
+  turnStatusText?: string;
   onRoll?: () => void;
 }
 
@@ -55,7 +59,15 @@ const PIP_POSITIONS: Record<number, { row: number; col: number }[]> = {
   ],
 };
 
-function SingleDie({ value, size = 44 }: { value: number; size?: number }) {
+function SingleDie({
+  value,
+  size = 44,
+  used = false,
+}: {
+  value: number;
+  size?: number;
+  used?: boolean;
+}) {
   const colorScheme = useColorScheme() ?? "light";
   const colors = Colors[colorScheme];
   const scale = useSharedValue(1);
@@ -65,10 +77,13 @@ function SingleDie({ value, size = 44 }: { value: number; size?: number }) {
   }, [value, scale]);
 
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
+    opacity: interpolate(scale.value, [1, 1.2], [used ? 0.42 : 1, used ? 0.48 : 1]),
+    transform: [{ scale: used ? scale.value * 0.97 : scale.value }],
   }));
 
-  const pipSize = size / 6;
+  const faceInset = Math.max(6, Math.round(size * 0.14));
+  const faceSize = size - faceInset * 2;
+  const pipSize = faceSize / 6;
   const pips = PIP_POSITIONS[value] ?? [];
 
   return (
@@ -80,11 +95,20 @@ function SingleDie({ value, size = 44 }: { value: number; size?: number }) {
             width: size,
             height: size,
             borderRadius: BorderRadius.md,
-            borderColor: colors.glassBorder,
+            borderColor: used ? colors.border : colors.glassBorder,
           },
         ]}
       >
-        <View style={[styles.grid, { width: size, height: size }]}>
+        {used && <View style={[styles.usedScrim, { borderRadius: BorderRadius.md }]} />}
+        <View
+          style={[
+            styles.face,
+            {
+              width: faceSize,
+              height: faceSize,
+            },
+          ]}
+        >
           {[0, 1, 2].map((row) =>
             [0, 1, 2].map((col) => {
               const hasPip = pips.some((p) => p.row === row && p.col === col);
@@ -94,8 +118,8 @@ function SingleDie({ value, size = 44 }: { value: number; size?: number }) {
                   style={[
                     styles.cell,
                     {
-                      width: size / 3,
-                      height: size / 3,
+                      width: faceSize / 3,
+                      height: faceSize / 3,
                     },
                   ]}
                 >
@@ -107,7 +131,7 @@ function SingleDie({ value, size = 44 }: { value: number; size?: number }) {
                           width: pipSize,
                           height: pipSize,
                           borderRadius: pipSize / 2,
-                          backgroundColor: colors.text,
+                          backgroundColor: used ? colors.textMuted : colors.text,
                         },
                       ]}
                     />
@@ -122,9 +146,17 @@ function SingleDie({ value, size = 44 }: { value: number; size?: number }) {
   );
 }
 
-export function DiceDisplay({ dice, canRoll, onRoll }: DiceDisplayProps) {
+export function DiceDisplay({
+  dice,
+  diceUsed,
+  canRoll,
+  canSubmit,
+  turnStatusText,
+  onRoll,
+}: DiceDisplayProps) {
   const colorScheme = useColorScheme() ?? "light";
   const colors = Colors[colorScheme];
+  const dieSize = 44;
 
   if (!dice) {
     const Wrapper = canRoll && onRoll ? TouchableOpacity : View;
@@ -138,7 +170,7 @@ export function DiceDisplay({ dice, canRoll, onRoll }: DiceDisplayProps) {
           }
         : {};
     return (
-      <View style={styles.container}>
+      <View style={styles.block}>
         <Wrapper {...wrapperProps}>
           <LiquidGlass
             style={[
@@ -158,30 +190,82 @@ export function DiceDisplay({ dice, canRoll, onRoll }: DiceDisplayProps) {
             </Text>
           </LiquidGlass>
         </Wrapper>
+        {turnStatusText && (
+          <Text style={[styles.statusText, { color: colors.textMuted }]}>{turnStatusText}</Text>
+        )}
       </View>
     );
   }
 
+  const isDoubles = dice[0] === dice[1];
+  const usage = diceUsed ?? Array.from({ length: isDoubles ? 4 : 2 }, () => false);
+  const remainingCount = usage.filter((used) => !used).length;
+  const usedCount = usage.length - remainingCount;
+  const statusLabel =
+    canSubmit && remainingCount === 0
+      ? "Ready to submit"
+      : canSubmit && usedCount > 0
+        ? "Moves queued"
+        : null;
+  const footerLabel = [turnStatusText, statusLabel].filter(Boolean).join(" · ");
+  const indicatorGroups = isDoubles
+    ? [usage.slice(0, 2), usage.slice(2, 4)]
+    : [[usage[0]], [usage[1]]];
+
   return (
-    <View style={styles.container}>
-      <SingleDie value={dice[0]} />
-      <SingleDie value={dice[1]} />
+    <View style={styles.block}>
+      <View style={styles.container}>
+        {[dice[0], dice[1]].map((value, dieIndex) => (
+          <View key={`${value}-${dieIndex}`} style={styles.dieColumn}>
+            <SingleDie value={value} size={dieSize} used={!isDoubles && usage[dieIndex]} />
+            <View style={styles.dieIndicatorRow}>
+              {indicatorGroups[dieIndex].map((used, indicatorIndex) => (
+                <View
+                  key={`${value}-${dieIndex}-${indicatorIndex}`}
+                  style={[
+                    styles.usagePill,
+                    indicatorGroups[dieIndex].length === 1
+                      ? styles.usagePillSingle
+                      : styles.usagePillDouble,
+                    {
+                      backgroundColor: used ? colors.primary : "transparent",
+                      borderColor: used ? colors.primary : colors.border,
+                    },
+                  ]}
+                />
+              ))}
+            </View>
+          </View>
+        ))}
+      </View>
+      {footerLabel && (
+        <Text style={[styles.statusText, { color: colors.textMuted }]}>{footerLabel}</Text>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  block: {
+    alignItems: "center",
+    gap: Spacing.xs,
+  },
   container: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "center",
     gap: Spacing.md,
+  },
+  dieColumn: {
+    width: 44,
+    alignItems: "center",
+    gap: 6,
   },
   die: {
     justifyContent: "center",
     alignItems: "center",
   },
-  grid: {
+  face: {
     flexDirection: "row",
     flexWrap: "wrap",
   },
@@ -191,6 +275,33 @@ const styles = StyleSheet.create({
   },
   pip: {
     opacity: 0.9,
+  },
+  usedScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(255,255,255,0.28)",
+  },
+  dieIndicatorRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 10,
+    gap: 4,
+  },
+  usagePill: {
+    height: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  usagePillSingle: {
+    width: 32,
+  },
+  usagePillDouble: {
+    width: 14,
+  },
+  statusText: {
+    fontSize: 11,
+    fontFamily: Fonts.medium,
+    letterSpacing: 0.2,
   },
   placeholder: {
     width: 88,

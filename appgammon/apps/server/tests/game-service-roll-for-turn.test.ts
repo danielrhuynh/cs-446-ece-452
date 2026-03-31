@@ -1,18 +1,13 @@
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { GameState } from "@appgammon/common";
+import type { GameEventBus } from "../src/event-bus/game-event-bus";
+import type { GameRepository } from "../src/repositories/game-repository";
+import { MatchService } from "../src/services/game-service";
 
 const mocks = vi.hoisted(() => ({
   rollDice: vi.fn(),
   hasAnyLegalMove: vi.fn(),
   advanceTurnState: vi.fn(),
-  repo: {
-    getGameInSession: vi.fn(),
-    updateGame: vi.fn(),
-    getActiveSeries: vi.fn(),
-    getActiveGame: vi.fn(),
-  },
-  publish: vi.fn(),
-  loggerInfo: vi.fn(),
 }));
 
 vi.mock("@appgammon/common", async () => {
@@ -25,38 +20,44 @@ vi.mock("@appgammon/common", async () => {
   };
 });
 
-vi.mock("../src/repositories/game-repository", () => ({
-  drizzleGameRepository: mocks.repo,
-}));
-
-vi.mock("../src/event-bus/game-event-bus", () => ({
-  gameEventBus: {
-    publish: mocks.publish,
-  },
-}));
-
 vi.mock("../src/utils/logger", () => ({
   logger: {
-    info: mocks.loggerInfo,
+    info: vi.fn(),
   },
 }));
 
 describe("rollForTurn", () => {
-  let rollForTurn: typeof import("../src/services/game-service.js").rollForTurn;
+  const repo = {
+    getSessionPlayers: vi.fn(),
+    getGameInSession: vi.fn(),
+    getActiveGame: vi.fn(),
+    createGame: vi.fn(),
+    updateGame: vi.fn(),
+    createMatch: vi.fn(),
+    getMatch: vi.fn(),
+    getActiveMatch: vi.fn(),
+    updateMatch: vi.fn(),
+    countMoves: vi.fn(),
+    appendMoves: vi.fn(),
+  } satisfies Record<keyof GameRepository, ReturnType<typeof vi.fn>>;
 
-  beforeAll(async () => {
-    ({ rollForTurn } = await import("../src/services/game-service.js"));
-  });
+  const eventBus = {
+    publish: vi.fn(),
+    subscribe: vi.fn(),
+  } satisfies GameEventBus;
+
+  let service: MatchService;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.repo.getActiveSeries.mockResolvedValue(null);
+    service = new MatchService(repo as unknown as GameRepository, eventBus);
+    repo.getActiveMatch.mockResolvedValue(null);
   });
 
   it("falls back to the opponent pre-roll when both players are blocked", async () => {
     const game: GameState = {
       id: "game-1",
-      seriesId: "series-1",
+      matchId: "match-1",
       board: Array.from({ length: 24 }, () => 0),
       bar: { player1: 1, player2: 1 },
       borneOff: { player1: 0, player2: 0 },
@@ -74,10 +75,12 @@ describe("rollForTurn", () => {
     game.board[0] = -2;
     game.board[23] = 2;
 
-    mocks.repo.getGameInSession.mockResolvedValue({
+    repo.getGameInSession.mockResolvedValue({
       game,
       player1Id: "player-1",
       player2Id: "player-2",
+      player1Connected: true,
+      player2Connected: true,
     });
     mocks.hasAnyLegalMove.mockReturnValueOnce(false);
     mocks.rollDice
@@ -91,7 +94,7 @@ describe("rollForTurn", () => {
       diceUsed: [false, false],
     });
 
-    const result = await rollForTurn("game-1", "player-1", "session-1");
+    const result = await service.rollForTurn("game-1", "player-1", "session-1");
 
     expect(result).toEqual({ success: true });
     expect(mocks.advanceTurnState).toHaveBeenCalledWith({
@@ -107,7 +110,7 @@ describe("rollForTurn", () => {
       currentPlayerRoll: [5, 6],
       fallbackOpponentRoll: [4, 1],
     });
-    expect(mocks.repo.updateGame).toHaveBeenCalledWith("game-1", {
+    expect(repo.updateGame).toHaveBeenCalledWith("game-1", {
       currentTurn: "player-2",
       turnPhase: "waiting_for_roll_or_double",
       dice: [4, 1],

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { runSSEKeepaliveLoop } from "../src/controllers/session-controller";
+import type { SSEMessage } from "hono/streaming";
+import { runSSEKeepaliveLoop, runSSESubscription } from "../src/utils/sse";
 
 describe("runSSEKeepaliveLoop", () => {
   it("stops and unsubscribes when the stream aborts", async () => {
@@ -55,6 +56,53 @@ describe("runSSEKeepaliveLoop", () => {
     await runSSEKeepaliveLoop(stream, unsubscribe, 1);
 
     expect(writes).toEqual([":keepalive\n\n", ":keepalive\n\n"]);
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it("writes the initial event and forwards subscribed events", async () => {
+    const writes: Array<{ event?: string; data: string }> = [];
+    let unsubscribe: (() => void) | undefined;
+
+    const stream = {
+      aborted: false,
+      closed: false,
+      async sleep() {
+        stream.closed = true;
+      },
+      async write() {
+        return undefined;
+      },
+      async writeSSE(input: SSEMessage) {
+        writes.push({
+          event: input.event,
+          data: await input.data,
+        });
+      },
+      onAbort() {
+        return undefined;
+      },
+    };
+
+    await runSSESubscription(stream, {
+      initialMessage: {
+        event: "session_state",
+        data: '{"id":"abc"}',
+      },
+      subscribe(send) {
+        send({
+          event: "session_updated",
+          data: '{"id":"abc","status":"ready"}',
+        });
+        unsubscribe = vi.fn();
+        return unsubscribe;
+      },
+      intervalMs: 1,
+    });
+
+    expect(writes).toEqual([
+      { event: "session_state", data: '{"id":"abc"}' },
+      { event: "session_updated", data: '{"id":"abc","status":"ready"}' },
+    ]);
     expect(unsubscribe).toHaveBeenCalledTimes(1);
   });
 });

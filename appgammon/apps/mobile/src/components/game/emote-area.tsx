@@ -1,88 +1,43 @@
-/** Emote display and picker. */
+/** Emote picker control. */
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { View, Text, TouchableOpacity, Modal, Pressable, StyleSheet } from "react-native";
-import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
-import { Colors, BorderRadius, Fonts, Spacing } from "@/constants/theme";
+import { Colors, BorderRadius, Fonts, Shadows, Spacing } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { LiquidGlass } from "@/components/ui/liquid-glass";
-import { EMOTES, type EmoteId, type LastEmote } from "@/types/game";
-
-const EMOTE_DURATION_MS = 2000;
+import { EMOTES, type EmoteId } from "@/types/game";
 
 interface EmoteAreaProps {
-  lastEmote: LastEmote | null;
-  emotesMuted: boolean;
   onEmoteSelect?: (emoteId: EmoteId) => void;
-  onMuteToggle?: (muted: boolean) => void;
 }
 
-export function EmoteArea({ lastEmote, emotesMuted, onEmoteSelect, onMuteToggle }: EmoteAreaProps) {
+export function EmoteArea({ onEmoteSelect }: EmoteAreaProps) {
   const colorScheme = useColorScheme() ?? "light";
   const colors = Colors[colorScheme];
   const [showPicker, setShowPicker] = useState(false);
-  const [showEmote, setShowEmote] = useState(false);
-
-  useEffect(() => {
-    if (!lastEmote || emotesMuted) {
-      setShowEmote(false);
-      return;
-    }
-    setShowEmote(true);
-    const t = setTimeout(() => setShowEmote(false), EMOTE_DURATION_MS);
-    return () => clearTimeout(t);
-  }, [lastEmote, emotesMuted]);
-
-  const emote = lastEmote ? EMOTES.find((e) => e.id === lastEmote.emoteId) : null;
+  const showPickerTrigger = !!onEmoteSelect;
 
   return (
     <View style={styles.container}>
-      {/* Emote display */}
-      {showEmote && lastEmote && !emotesMuted && emote && (
-        <Animated.View
-          entering={FadeIn.duration(150)}
-          exiting={FadeOut.duration(300)}
-          style={styles.display}
-        >
-          <LiquidGlass
-            style={[
-              styles.emoteBubble,
-              {
-                borderColor: colors.glassBorder,
-              },
-            ]}
-          >
-            <Text style={styles.emoteLabel}>{emote.label}</Text>
-          </LiquidGlass>
-        </Animated.View>
-      )}
-
-      {/* Mute toggle */}
-      {onMuteToggle && (
-        <TouchableOpacity onPress={() => onMuteToggle(!emotesMuted)} style={styles.muteButton}>
-          <Text style={[styles.muteLabel, { color: colors.textMuted }]}>
-            {emotesMuted ? "Unmute" : "Mute"} emotes
-          </Text>
-        </TouchableOpacity>
-      )}
-
-      {/* Emote picker button */}
-      {onEmoteSelect && (
+      {showPickerTrigger && (
         <TouchableOpacity
           onPress={() => setShowPicker(!showPicker)}
-          activeOpacity={0.7}
-          style={styles.pickerButton}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Open reaction picker"
         >
-          <LiquidGlass
+          <View
             style={[
-              styles.pickerButtonInner,
+              styles.triggerTile,
+              Shadows.sm,
               {
-                borderColor: colors.glassBorder,
+                backgroundColor: colors.cardBackground,
+                borderColor: colors.border,
               },
             ]}
           >
-            <Text style={[styles.pickerLabel, { color: colors.text }]}>😊</Text>
-          </LiquidGlass>
+            <Text style={styles.triggerEmoji}>😊</Text>
+            <Text style={[styles.triggerLabel, { color: colors.text }]}>React</Text>
+          </View>
         </TouchableOpacity>
       )}
 
@@ -95,8 +50,17 @@ export function EmoteArea({ lastEmote, emotesMuted, onEmoteSelect, onMuteToggle 
       >
         <Pressable style={styles.modalOverlay} onPress={() => setShowPicker(false)}>
           <Pressable>
-            <LiquidGlass style={[styles.pickerModal, { borderColor: colors.glassBorder }]}>
-              <Text style={[styles.pickerTitle, { color: colors.text }]}>Send Emote</Text>
+            <View
+              style={[
+                styles.pickerModal,
+                Shadows.md,
+                {
+                  backgroundColor: colors.cardBackground,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <Text style={[styles.pickerTitle, { color: colors.text }]}>React</Text>
               <View style={styles.pickerGrid}>
                 {EMOTES.map((e) => (
                   <TouchableOpacity
@@ -108,15 +72,29 @@ export function EmoteArea({ lastEmote, emotesMuted, onEmoteSelect, onMuteToggle 
                     activeOpacity={0.7}
                     style={styles.emoteOption}
                   >
-                    <LiquidGlass
-                      style={[styles.emoteOptionInner, { borderColor: colors.glassBorder }]}
+                    <View
+                      style={[
+                        styles.emoteOptionInner,
+                        {
+                          backgroundColor: colors.inputBackground,
+                          borderColor: colors.border,
+                        },
+                      ]}
                     >
-                      <Text style={styles.emoteLabel}>{e.label}</Text>
-                    </LiquidGlass>
+                      <Text
+                        style={[
+                          styles.emoteLabel,
+                          e.id === "gg" && styles.textEmoteLabel,
+                          e.id === "gg" && { color: colors.text },
+                        ]}
+                      >
+                        {e.label}
+                      </Text>
+                    </View>
                   </TouchableOpacity>
                 ))}
               </View>
-            </LiquidGlass>
+            </View>
           </Pressable>
         </Pressable>
       </Modal>
@@ -127,32 +105,24 @@ export function EmoteArea({ lastEmote, emotesMuted, onEmoteSelect, onMuteToggle 
 const styles = StyleSheet.create({
   container: {
     alignItems: "center",
-    gap: Spacing.sm,
   },
-  display: {
-    position: "absolute",
-    top: -40,
-  },
-  emoteBubble: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+  triggerTile: {
+    width: 76,
+    minHeight: 72,
     borderRadius: BorderRadius.lg,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    gap: 3,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.sm,
   },
-  emoteLabel: {
+  triggerEmoji: {
     fontSize: 20,
   },
-  pickerButton: {
-    padding: Spacing.xs,
-  },
-  pickerButtonInner: {
-    width: 44,
-    height: 44,
-    borderRadius: BorderRadius.full,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  pickerLabel: {
-    fontSize: 22,
+  triggerLabel: {
+    fontSize: 11,
+    fontFamily: Fonts.semibold,
   },
   modalOverlay: {
     flex: 1,
@@ -162,6 +132,7 @@ const styles = StyleSheet.create({
   },
   pickerModal: {
     borderRadius: BorderRadius.lg,
+    borderWidth: 1,
     padding: Spacing.xl,
     margin: Spacing.xl,
     minWidth: 260,
@@ -182,15 +153,17 @@ const styles = StyleSheet.create({
     padding: Spacing.xs,
   },
   emoteOptionInner: {
+    borderWidth: 1,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
     borderRadius: BorderRadius.lg,
   },
-  muteButton: {
-    paddingVertical: Spacing.xs,
+  emoteLabel: {
+    fontSize: 20,
   },
-  muteLabel: {
-    fontSize: 12,
-    fontFamily: Fonts.medium,
+  textEmoteLabel: {
+    fontSize: 18,
+    fontFamily: Fonts.bold,
+    letterSpacing: 0.4,
   },
 });

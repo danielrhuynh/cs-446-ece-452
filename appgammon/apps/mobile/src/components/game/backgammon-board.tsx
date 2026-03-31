@@ -19,6 +19,7 @@ interface BackgammonBoardProps {
   playerColor: PlayerColor;
   onPointPress?: (pointIndex: number) => void;
   selectedPoint?: number | null;
+  hintedDestinations?: number[];
 }
 
 const POINTS_PER_ROW = 12;
@@ -29,6 +30,7 @@ export function BackgammonBoard({
   playerColor,
   onPointPress,
   selectedPoint,
+  hintedDestinations = [],
 }: BackgammonBoardProps) {
   const { width } = useWindowDimensions();
   const colorScheme = useColorScheme() ?? "light";
@@ -83,6 +85,8 @@ export function BackgammonBoard({
                 height={pointHeight}
                 checkerSize={checkerSize}
                 selected={selectedPoint === pointIndex}
+                hinted={hintedDestinations.includes(pointIndex)}
+                hintColor={playerColor}
                 onPress={onPointPress ? () => onPointPress(pointIndex) : undefined}
               />
             ))}
@@ -111,6 +115,8 @@ export function BackgammonBoard({
                 height={pointHeight}
                 checkerSize={checkerSize}
                 selected={selectedPoint === pointIndex}
+                hinted={hintedDestinations.includes(pointIndex)}
+                hintColor={playerColor}
                 onPress={onPointPress ? () => onPointPress(pointIndex) : undefined}
               />
             ))}
@@ -124,6 +130,7 @@ export function BackgammonBoard({
           checkerSize={checkerSize}
           height={trayHeight}
           onPress={onPointPress}
+          hinted={hintedDestinations.includes(playerColor === "white" ? 24 : -1)}
         />
       </View>
     </View>

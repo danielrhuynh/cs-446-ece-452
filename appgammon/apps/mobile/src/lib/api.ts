@@ -2,7 +2,7 @@ import { hc, type InferResponseType } from "hono/client";
 import { getAuthToken, getDeviceId } from "@/lib/storage";
 import { API_BASE_URL } from "@/lib/api-base-url";
 import type { AppType } from "@server/app";
-import type { Move } from "@appgammon/common";
+import type { EmoteId, Move } from "@appgammon/common";
 
 const REQUEST_TIMEOUT_MS = 10000;
 
@@ -63,32 +63,25 @@ function normalizeId(sessionId: string) {
 
 // ── Session response types ──
 
-export type CreateSessionRes = InferResponseType<typeof client.sessions.create.$post, 200>;
+export type CreateSessionRes = InferResponseType<typeof client.sessions.$post, 200>;
 export type JoinSessionRes = InferResponseType<
   (typeof client.sessions)[":id"]["join"]["$post"],
   200
 >;
-export type StartGameRes = InferResponseType<
-  (typeof client.sessions)[":id"]["start"]["$post"],
-  200
->;
-export type CancelSessionRes = InferResponseType<
-  (typeof client.sessions)[":id"]["cancel"]["$post"],
-  200
->;
+export type CancelSessionRes = InferResponseType<(typeof client.sessions)[":id"]["$delete"], 200>;
 
-// ── Game response types ──
+// ── Match response types ──
 
-export type StartSeriesRes = InferResponseType<
-  (typeof client.games)[":id"]["series"]["start"]["$post"],
+export type StartMatchRes = InferResponseType<
+  (typeof client.sessions)[":id"]["match"]["$post"],
   200
 >;
-export type SyncGameRes = InferResponseType<(typeof client.games)[":id"]["sync"]["$get"], 200>;
+export type SyncMatchRes = InferResponseType<(typeof client.sessions)[":id"]["match"]["$get"], 200>;
 
 // ── Session API ──
 
 export async function createSession(deviceId: string, displayName: string) {
-  const res = await client.sessions.create.$post({
+  const res = await client.sessions.$post({
     json: { device_id: deviceId, display_name: displayName },
   });
   return unwrap<CreateSessionRes>(res);
@@ -102,35 +95,28 @@ export async function joinSession(deviceId: string, displayName: string, session
   return unwrap<JoinSessionRes>(res);
 }
 
-export async function startGame(sessionId: string) {
-  const res = await client.sessions[":id"].start.$post({
-    param: { id: normalizeId(sessionId) },
-  });
-  return unwrap<StartGameRes>(res);
-}
-
 export async function cancelSession(sessionId: string) {
-  const res = await client.sessions[":id"].cancel.$post({
+  const res = await client.sessions[":id"].$delete({
     param: { id: normalizeId(sessionId) },
   });
   return unwrap<CancelSessionRes>(res);
 }
 
-// ── Game API ──
+// ── Match API ──
 
-export async function startSeries(sessionId: string, bestOf: number) {
-  const res = await client.games[":id"].series.start.$post({
+export async function startMatch(sessionId: string, targetScore: number) {
+  const res = await client.sessions[":id"].match.$post({
     param: { id: normalizeId(sessionId) },
-    json: { best_of: bestOf as 1 | 3 | 5 | 7 },
+    json: { target_score: targetScore as 1 | 3 | 5 | 7 },
   });
-  return unwrap<StartSeriesRes>(res);
+  return unwrap<StartMatchRes>(res);
 }
 
-export async function syncGame(sessionId: string) {
-  const res = await client.games[":id"].sync.$get({
+export async function syncMatch(sessionId: string) {
+  const res = await client.sessions[":id"].match.$get({
     param: { id: normalizeId(sessionId) },
   });
-  return unwrap<SyncGameRes>(res);
+  return unwrap<SyncMatchRes>(res);
 }
 
 export async function submitMoves(
@@ -139,19 +125,18 @@ export async function submitMoves(
   version: number,
   moves: Move[],
 ) {
-  const res = await client.games[":id"]["board-state"].$put({
-    param: { id: normalizeId(sessionId) },
-    json: { game_id: gameId, version, moves },
+  const res = await client.sessions[":id"].match.games[":gameId"].moves.$put({
+    param: { id: normalizeId(sessionId), gameId },
+    json: { version, moves },
   });
   return unwrap<{ ok: true }>(res);
 }
 
 export async function proposeDouble(sessionId: string, gameId: string) {
-  const id = normalizeId(sessionId);
-  const res = await authFetch(
-    `${API_BASE_URL}/games/${id}/double?action=propose&game_id=${gameId}`,
-    { method: "POST" },
-  );
+  const res = await client.sessions[":id"].match.games[":gameId"].double.$post({
+    param: { id: normalizeId(sessionId), gameId },
+    json: { action: "propose" },
+  });
   return unwrap<{ ok: true }>(res);
 }
 
@@ -160,26 +145,24 @@ export async function respondToDouble(
   gameId: string,
   action: "accept" | "decline",
 ) {
-  const id = normalizeId(sessionId);
-  const res = await authFetch(
-    `${API_BASE_URL}/games/${id}/double?action=${action}&game_id=${gameId}`,
-    { method: "POST" },
-  );
-  return unwrap<{ ok: true }>(res);
-}
-
-export async function rollDice(sessionId: string, gameId: string) {
-  const id = normalizeId(sessionId);
-  const res = await authFetch(`${API_BASE_URL}/games/${id}/roll?game_id=${gameId}`, {
-    method: "POST",
+  const res = await client.sessions[":id"].match.games[":gameId"].double.$post({
+    param: { id: normalizeId(sessionId), gameId },
+    json: { action },
   });
   return unwrap<{ ok: true }>(res);
 }
 
-export async function sendEmote(sessionId: string, emoteId: string) {
-  const id = normalizeId(sessionId);
-  const res = await authFetch(`${API_BASE_URL}/games/${id}/emote?id=${emoteId}`, {
-    method: "POST",
+export async function rollDice(sessionId: string, gameId: string) {
+  const res = await client.sessions[":id"].match.games[":gameId"].roll.$post({
+    param: { id: normalizeId(sessionId), gameId },
+  });
+  return unwrap<{ ok: true }>(res);
+}
+
+export async function sendEmote(sessionId: string, emoteId: EmoteId) {
+  const res = await client.sessions[":id"].match.emotes.$post({
+    param: { id: normalizeId(sessionId) },
+    json: { emote_id: emoteId },
   });
   return unwrap<{ ok: true }>(res);
 }

@@ -2,10 +2,8 @@
 
 import { View, Text, Modal, Pressable, TouchableOpacity, StyleSheet } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { Colors, BorderRadius, Fonts, Spacing } from "@/constants/theme";
+import { Colors, BorderRadius, Fonts, Shadows, Spacing } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { LiquidGlass } from "@/components/ui/liquid-glass";
-import { Button } from "@/components/ui/button";
 import type { PlayerColor } from "@/types/game";
 
 interface DoublingCubeProps {
@@ -24,26 +22,45 @@ export function DoublingCube({
   owner: _owner,
   pendingProposal,
   canPropose,
-  currentPlayer: _currentPlayer,
+  currentPlayer,
   onProposeDouble,
   onAcceptDouble,
   onDeclineDouble,
 }: DoublingCubeProps) {
   const colorScheme = useColorScheme() ?? "light";
   const colors = Colors[colorScheme];
+  const activeColor = currentPlayer === "white" ? colors.primary : colors.accent;
+  const isActionable = canPropose && !pendingProposal && !!onProposeDouble;
+  const Wrapper = isActionable ? TouchableOpacity : View;
+  const wrapperProps = isActionable
+    ? {
+        onPress: onProposeDouble,
+        activeOpacity: 0.7,
+        accessibilityRole: "button" as const,
+        accessibilityLabel: `Stakes are ${value}. You can raise them now.`,
+      }
+    : {};
 
   return (
     <View style={styles.container}>
-      <LiquidGlass
-        style={[
-          styles.cube,
-          {
-            borderColor: colors.glassBorder,
-          },
-        ]}
-      >
-        <Text style={[styles.value, { color: colors.text }]}>{value === 1 ? "1" : value}</Text>
-      </LiquidGlass>
+      <Wrapper {...wrapperProps}>
+        <View
+          style={[
+            styles.tile,
+            Shadows.sm,
+            {
+              backgroundColor: colors.cardBackground,
+              borderColor: isActionable ? activeColor : colors.border,
+            },
+          ]}
+        >
+          <Text style={[styles.label, { color: colors.textMuted }]}>Stakes</Text>
+          <Text style={[styles.value, { color: colors.text }]}>{value}</Text>
+          <Text style={[styles.caption, { color: isActionable ? activeColor : colors.textMuted }]}>
+            {isActionable ? "Raise" : "Current"}
+          </Text>
+        </View>
+      </Wrapper>
 
       {/* Double proposal modal */}
       <Modal
@@ -54,9 +71,18 @@ export function DoublingCube({
       >
         <Pressable style={styles.modalOverlay} onPress={onDeclineDouble}>
           <Pressable>
-            <LiquidGlass style={[styles.proposalModal, { borderColor: colors.glassBorder }]}>
+            <View
+              style={[
+                styles.proposalModal,
+                Shadows.md,
+                {
+                  backgroundColor: colors.cardBackground,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
               <Text style={[styles.proposalTitle, { color: colors.text }]}>
-                Double to {value * 2}?
+                Raise the game to {value * 2} points?
               </Text>
               <View style={styles.buttons}>
                 <TouchableOpacity activeOpacity={0.7} onPress={onAcceptDouble}>
@@ -74,17 +100,13 @@ export function DoublingCube({
                   onPress={onDeclineDouble}
                   style={[styles.modalBtn, styles.modalBtnOutline, { borderColor: colors.primary }]}
                 >
-                  <Text style={[styles.modalBtnText, { color: colors.primary }]}>Decline</Text>
+                  <Text style={[styles.modalBtnText, { color: colors.primary }]}>Pass</Text>
                 </TouchableOpacity>
               </View>
-            </LiquidGlass>
+            </View>
           </Pressable>
         </Pressable>
       </Modal>
-
-      {!pendingProposal && canPropose && onProposeDouble && (
-        <Button title="Double" variant="secondary" size="sm" onPress={onProposeDouble} />
-      )}
     </View>
   );
 }
@@ -92,18 +114,30 @@ export function DoublingCube({
 const styles = StyleSheet.create({
   container: {
     alignItems: "center",
-    gap: Spacing.sm,
   },
-  cube: {
-    width: 40,
-    height: 40,
-    borderRadius: BorderRadius.md,
-    justifyContent: "center",
+  tile: {
+    width: 76,
+    minHeight: 72,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.sm,
     alignItems: "center",
+    justifyContent: "center",
+    gap: 2,
+  },
+  label: {
+    fontSize: 12,
+    fontFamily: Fonts.medium,
   },
   value: {
-    fontSize: 18,
+    fontSize: 24,
     fontFamily: Fonts.bold,
+  },
+  caption: {
+    fontSize: 10,
+    fontFamily: Fonts.semibold,
+    textAlign: "center",
   },
   modalOverlay: {
     flex: 1,
@@ -114,6 +148,7 @@ const styles = StyleSheet.create({
   proposalModal: {
     flexDirection: "row",
     alignItems: "center",
+    borderWidth: 1,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.lg,
     borderRadius: BorderRadius.md,

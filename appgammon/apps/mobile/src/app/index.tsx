@@ -1,12 +1,30 @@
 /** Home screen. */
 
 import { useState, useEffect } from "react";
-import { View, Text, StyleSheet, KeyboardAvoidingView, Platform } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableOpacity,
+} from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { Colors, Fonts, Spacing, BorderRadius, Layout, Shadows } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { getDisplayName, getHasSeenTutorial, setDisplayName } from "@/lib/storage";
+import { useDeviceId } from "@/hooks/use-device-id";
+import { joinSession } from "@/lib/api";
+import {
+  clearActiveSession,
+  clearAuthToken,
+  getActiveSession,
+  getDisplayName,
+  getHasSeenTutorial,
+  setActiveSession,
+  setAuthToken,
+  setDisplayName,
+} from "@/lib/storage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LiquidGlass } from "@/components/ui/liquid-glass";
@@ -15,6 +33,7 @@ import { ScreenContainer } from "@/components/ui/screen-container";
 export default function HomeScreen() {
   const router = useRouter();
   const { pendingSessionCode } = useLocalSearchParams<{ pendingSessionCode?: string }>();
+  const { deviceId, isLoading: deviceIdLoading } = useDeviceId();
   const colorScheme = useColorScheme() ?? "light";
   const colors = Colors[colorScheme];
 
@@ -33,10 +52,47 @@ export default function HomeScreen() {
         return;
       }
 
+      if (deviceId) {
+        const activeSession = await getActiveSession();
+
+        if (activeSession) {
+          try {
+            const session = await joinSession(
+              deviceId,
+              activeSession.displayName,
+              activeSession.sessionId,
+            );
+            await setAuthToken(session.auth_token);
+            await setActiveSession({
+              sessionId: session.id,
+              displayName: activeSession.displayName,
+              isHost: session.role === "host",
+              targetScore: activeSession.targetScore,
+            });
+
+            router.replace({
+              pathname: "/lobby",
+              params: {
+                sessionId: session.id,
+                displayName: activeSession.displayName,
+                isHost: session.role === "host" ? "true" : "false",
+                ...(activeSession.targetScore
+                  ? { targetScore: String(activeSession.targetScore) }
+                  : {}),
+              },
+            });
+            return;
+          } catch {
+            await clearActiveSession();
+            await clearAuthToken();
+          }
+        }
+      }
+
       setIsReady(true);
     }
     void loadHomeData();
-  }, [router]);
+  }, [deviceId, router]);
 
   const validate = () => {
     if (!displayNameValue.trim()) {
@@ -62,7 +118,7 @@ export default function HomeScreen() {
     });
   };
 
-  if (!isReady) {
+  if (!isReady || deviceIdLoading) {
     return (
       <ScreenContainer>
         <View style={styles.loadingState} />
@@ -137,18 +193,25 @@ export default function HomeScreen() {
                   accessibilityLabel="Join an existing game"
                   accessibilityHint="Enter a code from a friend to join their game"
                 />
-                <Button
-                  title="Replay tutorial"
-                  variant="ghost"
-                  size="md"
-                  fullWidth
-                  onPress={() =>
-                    router.push({ pathname: "/tutorial" as never, params: { source: "home" } })
-                  }
-                  accessibilityLabel="Open the backgammon tutorial again"
-                  accessibilityHint="Shows the rules and scoring screen"
-                />
               </View>
+
+              <TouchableOpacity
+                activeOpacity={0.84}
+                style={styles.tutorialCardPressable}
+                onPress={() =>
+                  router.push({ pathname: "/tutorial" as never, params: { source: "home" } })
+                }
+                accessibilityRole="button"
+                accessibilityLabel="Open the tutorial"
+                accessibilityHint="Shows a short walkthrough of movement, scoring, and doubling"
+              >
+                <LiquidGlass style={[styles.tutorialCard, { borderColor: colors.border }]}>
+                  <Text style={[styles.tutorialText, { color: colors.textMuted }]}>
+                    Rules refresher
+                  </Text>
+                  <Text style={[styles.tutorialMeta, { color: colors.secondary }]}>90 sec</Text>
+                </LiquidGlass>
+              </TouchableOpacity>
             </LiquidGlass>
           </Animated.View>
         </View>
@@ -194,8 +257,30 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.lg,
     paddingBottom: Spacing.lg,
     borderRadius: BorderRadius.xl,
+    gap: Spacing.md,
   },
-  inputSection: { width: "100%", marginBottom: Spacing.md },
+  inputSection: { width: "100%" },
   buttonSection: { width: "100%", gap: Spacing.sm },
+  tutorialCardPressable: {
+    width: "100%",
+  },
+  tutorialCard: {
+    width: "100%",
+    borderRadius: BorderRadius.full,
+    paddingVertical: 12,
+    paddingHorizontal: Spacing.md,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: Spacing.sm,
+  },
+  tutorialText: {
+    fontSize: 14,
+    fontFamily: Fonts.medium,
+  },
+  tutorialMeta: {
+    fontSize: 13,
+    fontFamily: Fonts.semibold,
+  },
   loadingState: { flex: 1 },
 });

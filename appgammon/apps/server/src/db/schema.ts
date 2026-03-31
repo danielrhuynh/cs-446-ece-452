@@ -6,7 +6,6 @@ export const players = pgTable("players", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: text("name").notNull(),
   device_id: text("device_id").notNull().unique(),
-  device_token: text("device_token"), // https://developer.apple.com/documentation/usernotifications/registering-your-app-with-apns
   created_at: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -19,15 +18,17 @@ export const sessions = pgTable("sessions", {
     .references(() => players.id)
     .notNull(),
   player_2_id: uuid("player2_id").references(() => players.id),
+  player_1_disconnected_at: timestamp("player1_disconnected_at"),
+  player_2_disconnected_at: timestamp("player2_disconnected_at"),
   created_at: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const series = pgTable("series", {
+export const matches = pgTable("matches", {
   id: uuid("id").defaultRandom().primaryKey(),
   session_id: varchar("session_id", { length: 6 })
     .references(() => sessions.id)
     .notNull(),
-  best_of: integer("best_of").notNull(),
+  target_score: integer("target_score").notNull(),
   player1_score: integer("player1_score").notNull().default(0),
   player2_score: integer("player2_score").notNull().default(0),
   status: text("status").notNull().default("active"),
@@ -37,8 +38,8 @@ export const series = pgTable("series", {
 
 export const games = pgTable("games", {
   id: uuid("id").defaultRandom().primaryKey(),
-  series_id: uuid("series_id")
-    .references(() => series.id)
+  match_id: uuid("match_id")
+    .references(() => matches.id)
     .notNull(),
   board: jsonb("board").notNull(),
   bar: jsonb("bar").notNull(),

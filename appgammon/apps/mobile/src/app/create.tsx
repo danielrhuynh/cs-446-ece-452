@@ -20,9 +20,9 @@ import Animated, {
 import { Colors, Fonts, Spacing, BorderRadius, Layout, Shadows } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useDeviceId } from "@/hooks/use-device-id";
-import { useSessionEvents } from "@/hooks/use-session-events";
+import { useRoomEvents } from "@/hooks/use-room-events";
 import { createSession, cancelSession, type CreateSessionRes } from "@/lib/api";
-import { setAuthToken } from "@/lib/storage";
+import { clearActiveSession, clearAuthToken, setActiveSession, setAuthToken } from "@/lib/storage";
 import { formatSessionCode } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { LiquidGlass } from "@/components/ui/liquid-glass";
@@ -31,7 +31,7 @@ import { LoadingCard } from "@/components/ui/loading-card";
 import { SegmentControl } from "@/components/ui/segment-control";
 import { QRCodeModal } from "@/components/ui/qr-code-modal";
 
-type BestOf = 3 | 5 | 7;
+type TargetScore = 3 | 5 | 7;
 
 /* Waiting indicator dot. */
 function PulsingDot({ color, delay }: { color: string; delay: number }) {
@@ -73,7 +73,7 @@ export default function CreateSessionScreen() {
   const [copied, setCopied] = useState(false);
   const createRequestedRef = useRef(false);
 
-  const [bestOf, setBestOf] = useState<BestOf>(3);
+  const [targetScore, setTargetScore] = useState<TargetScore>(3);
   const [gameClock, setGameClock] = useState(false);
   const [qrVisible, setQrVisible] = useState(false);
 
@@ -87,6 +87,12 @@ export default function CreateSessionScreen() {
       try {
         const newSession = await createSession(deviceId, displayName);
         await setAuthToken(newSession.auth_token);
+        await setActiveSession({
+          sessionId: newSession.id,
+          displayName,
+          isHost: true,
+          targetScore,
+        });
         setSession(newSession);
       } catch (err) {
         createRequestedRef.current = false;
@@ -96,27 +102,37 @@ export default function CreateSessionScreen() {
       }
     }
     if (!deviceIdLoading && deviceId) void doCreateSession();
-  }, [deviceId, deviceIdLoading, displayName]);
+  }, [deviceId, deviceIdLoading, displayName, targetScore]);
+
+  useEffect(() => {
+    if (!session || !displayName) return;
+
+    void setActiveSession({
+      sessionId: session.id,
+      displayName,
+      isHost: true,
+      targetScore,
+    });
+  }, [displayName, session, targetScore]);
 
   /* React to join and cancel events. */
-  const { session: sseSession, lastEvent: sseEvent } = useSessionEvents(session?.id);
+  const { session: sseSession, lastSessionEvent } = useRoomEvents(session?.id);
   const navigatedRef = useRef(false);
 
   useEffect(() => {
     if (navigatedRef.current) return;
     const latestSession = sseSession ?? session;
 
-    if (sseEvent === "session_cancelled" || latestSession?.status === "cancelled") {
+    if (lastSessionEvent === "session_cancelled" || latestSession?.status === "cancelled") {
+      void clearActiveSession();
+      void clearAuthToken();
       navigatedRef.current = true;
       router.replace("/");
       return;
     }
 
     const shouldEnterLobby =
-      !!latestSession &&
-      (sseEvent === "player_joined" ||
-        latestSession.status === "closed" ||
-        latestSession.status === "in_game");
+      !!latestSession && (lastSessionEvent === "session_ready" || latestSession.status === "ready");
 
     if (shouldEnterLobby) {
       navigatedRef.current = true;
@@ -126,16 +142,18 @@ export default function CreateSessionScreen() {
           sessionId: latestSession.id,
           displayName,
           isHost: "true",
-          bestOf: String(bestOf),
+          targetScore: String(targetScore),
         },
       });
     }
-  }, [bestOf, sseEvent, session, sseSession, displayName, router]);
+  }, [displayName, lastSessionEvent, router, session, sseSession, targetScore]);
 
   /* User actions. */
   const handleCancel = async () => {
     navigatedRef.current = true;
+    await clearActiveSession();
     if (!session) {
+      await clearAuthToken();
       router.back();
       return;
     }
@@ -144,6 +162,7 @@ export default function CreateSessionScreen() {
     } catch {
       /* best-effort */
     }
+    await clearAuthToken();
     router.back();
   };
 
@@ -259,8 +278,12 @@ export default function CreateSessionScreen() {
           <Animated.View entering={FadeInDown.delay(60).duration(260)} style={styles.wrap}>
             <LiquidGlass style={[styles.settingsCard, Shadows.sm]}>
               <View style={styles.settingRow}>
-                <Text style={[styles.settingLabel, { color: colors.text }]}>Best of</Text>
-                <SegmentControl<BestOf> options={[3, 5, 7]} value={bestOf} onChange={setBestOf} />
+                <Text style={[styles.settingLabel, { color: colors.text }]}>Target score</Text>
+                <SegmentControl<TargetScore>
+                  options={[3, 5, 7]}
+                  value={targetScore}
+                  onChange={setTargetScore}
+                />
               </View>
               <View style={[styles.settingDivider, { backgroundColor: colors.border }]} />
               <View style={styles.settingRow}>

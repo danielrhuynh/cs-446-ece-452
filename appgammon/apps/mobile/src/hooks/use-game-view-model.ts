@@ -8,8 +8,8 @@ import {
   submitMoves,
 } from "@/lib/api";
 import { mapServerToUIGameState } from "@/lib/game-state-mapper";
-import { useGameEvents } from "./use-game-events";
-import { useSessionEvents } from "./use-session-events";
+import { clearActiveSession, clearAuthToken } from "@/lib/storage";
+import { useRoomEvents } from "./use-room-events";
 import type { EmoteId, LastEmote, PlayerColor } from "@/types/game";
 import {
   applyMove,
@@ -26,36 +26,39 @@ import {
 /** Maps game events and actions into game-screen UI state. */
 
 export function useGameViewModel(sessionId: string | undefined, isHost: boolean) {
-  const { session, lastEvent: sessionLastEvent } = useSessionEvents(sessionId);
   const {
-    seriesState,
+    session,
+    matchState,
+    lastSessionEvent,
     doubleProposal,
     lastEmote: sseEmote,
     gameOverInfo,
-    seriesCompleteInfo,
-  } = useGameEvents(sessionId);
+    matchCompleteInfo,
+  } = useRoomEvents(sessionId);
 
   const player1Id = session?.player_1_id ?? "";
   const myPlayerId = isHost ? (session?.player_1_id ?? "") : (session?.player_2_id ?? "");
   const playerColor: PlayerColor = isHost ? "white" : "red";
   const myRole: PlayerRole = colorToRole(playerColor);
+  const opponentDisconnected = isHost
+    ? !!session?.player_2 && !session.player_2_connected
+    : !!session && !session.player_1_connected;
 
   const [pendingMoves, setPendingMoves] = useState<Move[]>([]);
   const [selectedPoint, setSelectedPoint] = useState<number | null>(null);
-  const [emotesMuted, setEmotesMuted] = useState(false);
   const [lastEmote, setLastEmote] = useState<LastEmote | null>(null);
 
   useEffect(() => {
-    if (!sseEmote || emotesMuted) return;
+    if (!sseEmote) return;
     const fromColor: PlayerColor = sseEmote.fromPlayer === player1Id ? "white" : "red";
     setLastEmote({
       emoteId: sseEmote.emoteId as EmoteId,
       fromPlayer: fromColor,
       timestamp: sseEmote.timestamp,
     });
-  }, [emotesMuted, player1Id, sseEmote]);
+  }, [player1Id, sseEmote]);
 
-  const serverGame = seriesState?.currentGame ?? null;
+  const serverGame = matchState?.currentGame ?? null;
   const workingState = useMemo(() => {
     if (!serverGame) return null;
 
@@ -90,17 +93,17 @@ export function useGameViewModel(sessionId: string | undefined, isHost: boolean)
   }, [serverGame]);
 
   const uiGameState = useMemo(() => {
-    if (!seriesState) return null;
+    if (!matchState) return null;
 
     const mapped = mapServerToUIGameState(
-      seriesState,
+      matchState,
       player1Id,
       myPlayerId,
-      doubleProposal !== null,
+      doubleProposal !== null && doubleProposal.proposedBy !== myPlayerId,
       lastEmote,
     );
 
-    if (workingState && seriesState.currentGame) {
+    if (workingState && matchState.currentGame) {
       mapped.board = {
         points: workingState.board.map((value) => ({
           white: Math.max(0, value),
@@ -118,25 +121,90 @@ export function useGameViewModel(sessionId: string | undefined, isHost: boolean)
     }
 
     return mapped;
-  }, [doubleProposal, lastEmote, myPlayerId, player1Id, seriesState, workingState]);
+  }, [doubleProposal, lastEmote, matchState, myPlayerId, player1Id, workingState]);
+
+  const hintedDestinations = useMemo(() => {
+    if (!workingState || !uiGameState?.canMove || selectedPoint === null) return [];
+
+    const available = getAvailableDice(workingState.dice, workingState.diceUsed);
+    if (available.length === 0) return [];
+
+    const destinations = new Set<number>();
+
+    for (const die of new Set(available)) {
+      const validMoves = getValidMoves(
+        workingState.board,
+        workingState.bar,
+        workingState.borneOff,
+        myRole,
+        die,
+      );
+
+      for (const move of validMoves) {
+        if (move.from === selectedPoint) {
+          destinations.add(move.to);
+        }
+      }
+    }
+
+    if (available.length >= 2) {
+      for (const die1 of new Set(available)) {
+        const firstMoves = getValidMoves(
+          workingState.board,
+          workingState.bar,
+          workingState.borneOff,
+          myRole,
+          die1,
+        );
+
+        for (const firstMove of firstMoves) {
+          if (firstMove.from !== selectedPoint) continue;
+
+          const after = applyMove(
+            workingState.board,
+            workingState.bar,
+            workingState.borneOff,
+            firstMove,
+            myRole,
+          );
+          const updatedDiceUsed = markDieUsed(workingState.dice, workingState.diceUsed, die1);
+          const remaining = getAvailableDice(workingState.dice, updatedDiceUsed);
+
+          for (const die2 of new Set(remaining)) {
+            const secondMoves = getValidMoves(after.board, after.bar, after.borneOff, myRole, die2);
+
+            for (const secondMove of secondMoves) {
+              if (secondMove.from === firstMove.to) {
+                destinations.add(secondMove.to);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return [...destinations];
+  }, [myRole, selectedPoint, uiGameState?.canMove, workingState]);
 
   const leaveSession = useCallback(async () => {
     if (!sessionId) return;
+    await clearActiveSession();
     try {
       await cancelSession(sessionId);
     } catch {
       // Ignore cancel failures.
     }
+    await clearAuthToken();
   }, [sessionId]);
 
   const rollCurrentTurn = useCallback(async () => {
-    if (!sessionId || !serverGame) return;
+    if (!sessionId || !serverGame || opponentDisconnected) return;
     await rollDice(sessionId, serverGame.id);
-  }, [serverGame, sessionId]);
+  }, [opponentDisconnected, serverGame, sessionId]);
 
   const selectPoint = useCallback(
     (pointIndex: number) => {
-      if (!serverGame || !workingState || !uiGameState?.canMove) return;
+      if (!serverGame || !workingState || !uiGameState?.canMove || opponentDisconnected) return;
       const dice = workingState.dice;
       const available = getAvailableDice(dice, workingState.diceUsed);
       if (available.length === 0) return;
@@ -222,11 +290,11 @@ export function useGameViewModel(sessionId: string | undefined, isHost: boolean)
 
       setSelectedPoint(null);
     },
-    [myRole, selectedPoint, serverGame, uiGameState?.canMove, workingState],
+    [myRole, opponentDisconnected, selectedPoint, serverGame, uiGameState?.canMove, workingState],
   );
 
   const submitPendingMoveSequence = useCallback(async () => {
-    if (!sessionId || !serverGame || pendingMoves.length === 0) return;
+    if (!sessionId || !serverGame || pendingMoves.length === 0 || opponentDisconnected) return;
 
     try {
       await submitMoves(sessionId, serverGame.id, serverGame.version, pendingMoves);
@@ -237,26 +305,26 @@ export function useGameViewModel(sessionId: string | undefined, isHost: boolean)
       setSelectedPoint(null);
       throw error;
     }
-  }, [pendingMoves, serverGame, sessionId]);
+  }, [opponentDisconnected, pendingMoves, serverGame, sessionId]);
 
   const proposeDoubleAction = useCallback(async () => {
-    if (!sessionId || !serverGame) return;
+    if (!sessionId || !serverGame || opponentDisconnected) return;
     await proposeDouble(sessionId, serverGame.id);
-  }, [serverGame, sessionId]);
+  }, [opponentDisconnected, serverGame, sessionId]);
 
   const acceptDoubleAction = useCallback(async () => {
-    if (!sessionId || !serverGame) return;
+    if (!sessionId || !serverGame || opponentDisconnected) return;
     await respondToDouble(sessionId, serverGame.id, "accept");
-  }, [serverGame, sessionId]);
+  }, [opponentDisconnected, serverGame, sessionId]);
 
   const declineDoubleAction = useCallback(async () => {
-    if (!sessionId || !serverGame) return;
+    if (!sessionId || !serverGame || opponentDisconnected) return;
     await respondToDouble(sessionId, serverGame.id, "decline");
-  }, [serverGame, sessionId]);
+  }, [opponentDisconnected, serverGame, sessionId]);
 
   const sendLocalEmote = useCallback(
     async (emoteId: EmoteId) => {
-      if (!sessionId) return;
+      if (!sessionId || opponentDisconnected) return;
 
       setLastEmote({ emoteId, fromPlayer: playerColor, timestamp: Date.now() });
       try {
@@ -265,7 +333,7 @@ export function useGameViewModel(sessionId: string | undefined, isHost: boolean)
         // Ignore send failures. The server still enforces rate limits.
       }
     },
-    [playerColor, sessionId],
+    [opponentDisconnected, playerColor, sessionId],
   );
 
   return {
@@ -273,13 +341,15 @@ export function useGameViewModel(sessionId: string | undefined, isHost: boolean)
     uiGameState,
     playerColor,
     selectedPoint,
-    emotesMuted,
-    setEmotesMuted,
-    shouldExitSession: sessionLastEvent === "session_cancelled" || session?.status === "cancelled",
+    hintedDestinations,
+    diceUsed: workingState?.diceUsed ?? null,
+    opponentDisconnected,
+    reconnectDeadlineAt: session?.reconnect_deadline_at ?? null,
+    shouldExitSession: lastSessionEvent === "session_cancelled" || session?.status === "cancelled",
     gameOverInfo,
-    seriesCompleteInfo,
+    matchCompleteInfo,
     isLoading: !session || !uiGameState,
-    canSubmitMoves: pendingMoves.length > 0 && !!uiGameState?.canMove,
+    canSubmitMoves: pendingMoves.length > 0 && !!uiGameState?.canMove && !opponentDisconnected,
     actions: {
       leaveSession,
       onPointPress: selectPoint,

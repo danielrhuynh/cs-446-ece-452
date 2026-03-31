@@ -1,8 +1,8 @@
 /** Back button with a 44px touch target. */
 
-import { Text, StyleSheet, TouchableOpacity } from "react-native";
+import { Text, StyleSheet, TouchableOpacity, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors, Fonts, BorderRadius, Shadows } from "@/constants/theme";
+import { Colors, Fonts, BorderRadius, Shadows, Spacing } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { LiquidGlass } from "@/components/ui/liquid-glass";
 
@@ -18,7 +18,7 @@ export function BackButton({ onPress, label = "Back" }: BackButtonProps) {
   return (
     <TouchableOpacity
       onPress={onPress}
-      style={styles.backButton}
+      style={[styles.backButton, Platform.OS === "web" && styles.backButtonWeb]}
       activeOpacity={0.8}
       accessibilityLabel={`Go back: ${label}`}
       accessibilityRole="button"
@@ -34,6 +34,9 @@ export function BackButton({ onPress, label = "Back" }: BackButtonProps) {
 const styles = StyleSheet.create({
   backButton: {
     alignSelf: "flex-start",
+  },
+  backButtonWeb: {
+    padding: Spacing.xs,
   },
   backGlass: {
     flexDirection: "row",

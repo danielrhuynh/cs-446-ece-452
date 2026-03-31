@@ -1,54 +1,37 @@
-/**
- * Game controller — HTTP routes and SSE for backgammon gameplay.
- */
-
 import { Hono } from "hono";
-import { streamSSE } from "hono/streaming";
 import { sValidator } from "@hono/standard-validator";
 import { describeRoute } from "hono-openapi";
 import {
-  startSeriesPayloadSchema,
+  doubleActionPayloadSchema,
+  emotePayloadSchema,
+  startMatchPayloadSchema,
   submitMovesPayloadSchema,
-  doubleActionSchema,
-  emoteIdSchema,
 } from "../schemas/game";
 import { normalizeSessionId } from "../schemas/session";
 import {
   jsonSchema,
   errorResponse,
+  matchStateSchema,
   okResponse,
-  seriesStateSchema,
 } from "../schemas/openapi-responses";
-import { gameEventBus } from "../event-bus/game-event-bus";
 import { authenticateRequest } from "../middleware/auth";
-import * as gameService from "../services/game-service";
-import { runSSEKeepaliveLoop } from "./session-controller";
+import { matchService } from "../services/game-service";
 
-const validationHook = (
-  result: { success: boolean },
-  c: { json: (data: { error: string }, status: 400) => Response },
-) => {
-  if (!result.success) {
-    return c.json({ error: "Validation failed" }, 400);
-  }
-};
-
-export const gameRoutes = new Hono()
+export const matchRoutes = new Hono()
   .post(
-    "/:id/series/start",
+    "/:id/match",
     describeRoute({
-      tags: ["Game"],
-      summary: "Start a new series",
-      description:
-        "Host-only. Creates a best-of-N series with the first game and opening dice roll.",
+      tags: ["Match"],
+      summary: "Start a new match",
+      description: "Host-only. Creates a target-score match with the first game and opening roll.",
       requestBody: {
         required: true,
-        content: { "application/json": { schema: jsonSchema(startSeriesPayloadSchema) } },
+        content: { "application/json": { schema: jsonSchema(startMatchPayloadSchema) } },
       },
       responses: {
         200: {
-          description: "Series started",
-          content: { "application/json": { schema: jsonSchema(seriesStateSchema) } },
+          description: "Match started",
+          content: { "application/json": { schema: jsonSchema(matchStateSchema) } },
         },
         401: {
           description: "Unauthorized",
@@ -64,7 +47,7 @@ export const gameRoutes = new Hono()
         },
       },
     }),
-    sValidator("json", startSeriesPayloadSchema, validationHook),
+    sValidator("json", startMatchPayloadSchema),
     async (c) => {
       const sessionId = normalizeSessionId(c.req.param("id"));
       const claims = await authenticateRequest(c, sessionId);
@@ -74,11 +57,11 @@ export const gameRoutes = new Hono()
       }
 
       if (claims.role !== "host") {
-        return c.json({ error: "Only the host can start a series" }, 403);
+        return c.json({ error: "Only the host can start a match" }, 403);
       }
 
-      const { best_of } = c.req.valid("json");
-      const result = await gameService.startSeries(sessionId, best_of);
+      const { target_score } = c.req.valid("json");
+      const result = await matchService.startMatch(sessionId, target_score);
 
       if (!result.success) {
         return c.json({ error: result.error }, (result.status ?? 400) as 400);
@@ -88,22 +71,22 @@ export const gameRoutes = new Hono()
     },
   )
   .get(
-    "/:id/sync",
+    "/:id/match",
     describeRoute({
-      tags: ["Game"],
-      summary: "Sync game state",
-      description: "Returns the current series and game state for this session.",
+      tags: ["Match"],
+      summary: "Sync match state",
+      description: "Returns the current match and game state for this session.",
       responses: {
         200: {
           description: "Current state",
-          content: { "application/json": { schema: jsonSchema(seriesStateSchema) } },
+          content: { "application/json": { schema: jsonSchema(matchStateSchema) } },
         },
         401: {
           description: "Unauthorized",
           content: { "application/json": { schema: jsonSchema(errorResponse) } },
         },
         404: {
-          description: "No active series",
+          description: "No active match",
           content: { "application/json": { schema: jsonSchema(errorResponse) } },
         },
       },
@@ -116,19 +99,19 @@ export const gameRoutes = new Hono()
         return c.json({ error: "Unauthorized" }, 401);
       }
 
-      const state = await gameService.getSeriesState(sessionId);
+      const state = await matchService.getMatchState(sessionId);
 
       if (!state) {
-        return c.json({ error: "No active series found" }, 404);
+        return c.json({ error: "No active match found" }, 404);
       }
 
       return c.json(state);
     },
   )
   .put(
-    "/:id/board-state",
+    "/:id/match/games/:gameId/moves",
     describeRoute({
-      tags: ["Game"],
+      tags: ["Match"],
       summary: "Submit moves",
       description:
         "Submit a sequence of moves for the current turn. Uses optimistic locking via version.",
@@ -151,7 +134,7 @@ export const gameRoutes = new Hono()
         },
       },
     }),
-    sValidator("json", submitMovesPayloadSchema, validationHook),
+    sValidator("json", submitMovesPayloadSchema),
     async (c) => {
       const sessionId = normalizeSessionId(c.req.param("id"));
       const claims = await authenticateRequest(c, sessionId);
@@ -160,8 +143,9 @@ export const gameRoutes = new Hono()
         return c.json({ error: "Unauthorized" }, 401);
       }
 
-      const { game_id, version, moves } = c.req.valid("json");
-      const result = await gameService.submitMoves(game_id, claims.sub, version, moves, sessionId);
+      const { version, moves } = c.req.valid("json");
+      const gameId = c.req.param("gameId");
+      const result = await matchService.submitMoves(gameId, claims.sub, version, moves, sessionId);
 
       if (!result.success) {
         return c.json({ error: result.error }, (result.status ?? 400) as 400);
@@ -171,12 +155,15 @@ export const gameRoutes = new Hono()
     },
   )
   .post(
-    "/:id/double",
+    "/:id/match/games/:gameId/double",
     describeRoute({
-      tags: ["Game"],
+      tags: ["Match"],
       summary: "Doubling cube action",
-      description:
-        "Propose, accept, or decline a double. Query params: ?action=propose|accept|decline&game_id=UUID",
+      description: "Propose, accept, or decline a double.",
+      requestBody: {
+        required: true,
+        content: { "application/json": { schema: jsonSchema(doubleActionPayloadSchema) } },
+      },
       responses: {
         200: {
           description: "Action successful",
@@ -192,6 +179,7 @@ export const gameRoutes = new Hono()
         },
       },
     }),
+    sValidator("json", doubleActionPayloadSchema),
     async (c) => {
       const sessionId = normalizeSessionId(c.req.param("id"));
       const claims = await authenticateRequest(c, sessionId);
@@ -200,23 +188,15 @@ export const gameRoutes = new Hono()
         return c.json({ error: "Unauthorized" }, 401);
       }
 
-      const action = c.req.query("action");
-      const parsed = doubleActionSchema.safeParse(action);
-      if (!parsed.success) {
-        return c.json({ error: "Invalid action. Use ?action=propose|accept|decline" }, 400);
-      }
-
-      const gameId = c.req.query("game_id");
-      if (!gameId) {
-        return c.json({ error: "game_id query parameter required" }, 400);
-      }
+      const { action } = c.req.valid("json");
+      const gameId = c.req.param("gameId");
 
       let result: { success: boolean; error?: string; status?: number };
 
-      if (parsed.data === "propose") {
-        result = await gameService.proposeDouble(gameId, claims.sub, sessionId);
+      if (action === "propose") {
+        result = await matchService.proposeDouble(gameId, claims.sub, sessionId);
       } else {
-        result = await gameService.respondToDouble(gameId, claims.sub, parsed.data, sessionId);
+        result = await matchService.respondToDouble(gameId, claims.sub, action, sessionId);
       }
 
       if (!result.success) {
@@ -227,11 +207,11 @@ export const gameRoutes = new Hono()
     },
   )
   .post(
-    "/:id/roll",
+    "/:id/match/games/:gameId/roll",
     describeRoute({
-      tags: ["Game"],
+      tags: ["Match"],
       summary: "Roll dice",
-      description: "Roll dice for the current turn (skip doubling). Query param: ?game_id=UUID",
+      description: "Roll dice for the current turn (skip doubling).",
       responses: {
         200: {
           description: "Dice rolled",
@@ -255,12 +235,9 @@ export const gameRoutes = new Hono()
         return c.json({ error: "Unauthorized" }, 401);
       }
 
-      const gameId = c.req.query("game_id");
-      if (!gameId) {
-        return c.json({ error: "game_id query parameter required" }, 400);
-      }
+      const gameId = c.req.param("gameId");
 
-      const result = await gameService.rollForTurn(gameId, claims.sub, sessionId);
+      const result = await matchService.rollForTurn(gameId, claims.sub, sessionId);
 
       if (!result.success) {
         return c.json({ error: result.error }, (result.status ?? 400) as 400);
@@ -270,12 +247,15 @@ export const gameRoutes = new Hono()
     },
   )
   .post(
-    "/:id/emote",
+    "/:id/match/emotes",
     describeRoute({
-      tags: ["Game"],
+      tags: ["Match"],
       summary: "Send an emote",
-      description:
-        "Send an emote to the opponent. Rate limited to 1 per 3 seconds. Query param: ?id=emoteId",
+      description: "Send an emote to the opponent. Rate limited to 1 per 3 seconds.",
+      requestBody: {
+        required: true,
+        content: { "application/json": { schema: jsonSchema(emotePayloadSchema) } },
+      },
       responses: {
         200: {
           description: "Emote sent",
@@ -291,6 +271,7 @@ export const gameRoutes = new Hono()
         },
       },
     }),
+    sValidator("json", emotePayloadSchema),
     async (c) => {
       const sessionId = normalizeSessionId(c.req.param("id"));
       const claims = await authenticateRequest(c, sessionId);
@@ -299,54 +280,14 @@ export const gameRoutes = new Hono()
         return c.json({ error: "Unauthorized" }, 401);
       }
 
-      const emoteId = c.req.query("id");
-      const parsed = emoteIdSchema.safeParse(emoteId);
-      if (!parsed.success) {
-        return c.json({ error: "Invalid emote ID" }, 400);
-      }
+      const { emote_id } = c.req.valid("json");
 
-      const result = gameService.sendEmote(sessionId, claims.sub, parsed.data);
+      const result = await matchService.sendEmote(sessionId, claims.sub, emote_id);
 
       if (!result.success) {
-        return c.json({ error: result.error }, 429);
+        return c.json({ error: result.error }, (result.status ?? 400) as 400);
       }
 
       return c.json({ ok: true });
     },
   );
-
-// SSE controller — separate instance (streaming can't flow through RPC types)
-export const gameSSEController = new Hono().get("/:id/events", async (c) => {
-  const sessionId = normalizeSessionId(c.req.param("id"));
-  const claims = await authenticateRequest(c, sessionId);
-
-  if (!claims) {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
-
-  const state = await gameService.getSeriesState(sessionId);
-  if (!state) {
-    return c.json({ error: "No active series found" }, 404);
-  }
-
-  return streamSSE(c, async (stream) => {
-    await stream.writeSSE({
-      event: "game_state",
-      data: JSON.stringify(state),
-    });
-
-    const unsubscribe = gameEventBus.subscribe(sessionId, (event) => {
-      // Filter targeted events
-      if (event.forPlayer && event.forPlayer !== claims.sub) return;
-
-      stream
-        .writeSSE({
-          event: event.type,
-          data: JSON.stringify(event.data),
-        })
-        .catch(() => {});
-    });
-
-    await runSSEKeepaliveLoop(stream, unsubscribe);
-  });
-});

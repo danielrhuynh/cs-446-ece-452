@@ -13,64 +13,20 @@ import {
   sessionResponse,
   sessionWithTokenResponse,
 } from "../schemas/openapi-responses";
+import { gameEventBus } from "../event-bus/game-event-bus";
 import { sessionEventBus } from "../event-bus/session-event-bus";
-import * as sessionService from "../services/session-service";
-import { getOrCreatePlayer } from "../services/session-service";
+import { matchService } from "../services/game-service";
+import { sessionService } from "../services/session-service";
 import { signSessionToken } from "../utils/auth";
+import { runSSEKeepaliveLoop } from "../utils/sse";
 import { authenticateRequest } from "../middleware/auth";
-
-type KeepAliveStream = {
-  aborted: boolean;
-  closed: boolean;
-  sleep: (ms: number) => Promise<unknown>;
-  write: (input: string) => Promise<unknown>;
-  onAbort: (listener: () => void) => void;
-};
-
-export async function runSSEKeepaliveLoop(
-  stream: KeepAliveStream,
-  unsubscribe: () => void,
-  intervalMs = 15000,
-) {
-  let active = true;
-  let unsubscribed = false;
-  const unsubscribeOnce = () => {
-    if (unsubscribed) return;
-    unsubscribed = true;
-    unsubscribe();
-  };
-
-  stream.onAbort(() => {
-    active = false;
-    unsubscribeOnce();
-  });
-
-  try {
-    while (active && !stream.aborted && !stream.closed) {
-      await stream.sleep(intervalMs);
-      if (!active || stream.aborted || stream.closed) break;
-      await stream.write(":keepalive\n\n");
-    }
-  } finally {
-    unsubscribeOnce();
-  }
-}
-
-const validationHook = (
-  result: { success: boolean },
-  c: { json: (data: { error: string }, status: 400) => Response },
-) => {
-  if (!result.success) {
-    return c.json({ error: "Validation failed" }, 400);
-  }
-};
 
 export const sessionRoutes = new Hono()
   .post(
-    "/create",
+    "/",
     describeRoute({
       tags: ["Sessions"],
-      summary: "Create a new game session",
+      summary: "Create a new session",
       description: "Creates a session and returns the session ID with an auth token for the host.",
       requestBody: {
         required: true,
@@ -87,24 +43,29 @@ export const sessionRoutes = new Hono()
         },
       },
     }),
-    sValidator("json", createSessionPayloadSchema, validationHook),
+    sValidator("json", createSessionPayloadSchema),
     async (c) => {
       const { device_id, display_name } = c.req.valid("json");
 
-      const player = await getOrCreatePlayer(device_id, display_name);
-      const session = await sessionService.createSession(player.id);
+      const player = await sessionService.getOrCreatePlayer(device_id, display_name);
+      const createdSession = await sessionService.createSession(player.id);
+      const session = await sessionService.getSession(createdSession.id);
+
+      if (!session) {
+        return c.json({ error: "Failed to create session" }, 400);
+      }
 
       const authToken = await signSessionToken({
         playerId: player.id,
-        sessionId: session.id,
+        sessionId: createdSession.id,
         role: "host",
         deviceId: device_id,
       });
 
       return c.json({
         ...session,
-        created_at: session.created_at.toISOString(),
         auth_token: authToken,
+        role: "host",
       });
     },
   )
@@ -130,32 +91,32 @@ export const sessionRoutes = new Hono()
         },
       },
     }),
-    sValidator("json", joinSessionPayloadSchema, validationHook),
+    sValidator("json", joinSessionPayloadSchema),
     async (c) => {
       const { device_id, display_name } = c.req.valid("json");
       const session_id = normalizeSessionId(c.req.param("id"));
 
-      const player = await getOrCreatePlayer(device_id, display_name);
-      const session = await sessionService.joinSession(player.id, session_id);
+      const player = await sessionService.getOrCreatePlayer(device_id, display_name);
+      const result = await sessionService.joinSession(player.id, session_id);
 
-      if (!session) {
+      if (!result) {
         return c.json(
-          { error: "Failed to join session. It may not exist, be full, or already started." },
+          { error: "Failed to join session. It may not exist, be full, or no longer be joinable." },
           400,
         );
       }
 
       const authToken = await signSessionToken({
         playerId: player.id,
-        sessionId: session.id,
-        role: "guest",
+        sessionId: result.session.id,
+        role: result.role,
         deviceId: device_id,
       });
 
       return c.json({
-        ...session,
-        created_at: session.created_at.toISOString(),
+        ...result.session,
         auth_token: authToken,
+        role: result.role,
       });
     },
   )
@@ -204,55 +165,12 @@ export const sessionRoutes = new Hono()
       return c.json(session);
     },
   )
-  .post(
-    "/:id/start",
-    describeRoute({
-      tags: ["Sessions"],
-      summary: "Start the game",
-      description: "Host-only. Transitions session from 'closed' to 'in_game'.",
-      responses: {
-        200: {
-          description: "Game started",
-          content: { "application/json": { schema: jsonSchema(sessionResponse) } },
-        },
-        401: {
-          description: "Unauthorized",
-          content: { "application/json": { schema: jsonSchema(errorResponse) } },
-        },
-        403: {
-          description: "Not the host",
-          content: { "application/json": { schema: jsonSchema(errorResponse) } },
-        },
-      },
-    }),
-    async (c) => {
-      const sessionId = normalizeSessionId(c.req.param("id"));
-      const claims = await authenticateRequest(c, sessionId);
-
-      if (!claims) {
-        return c.json({ error: "Unauthorized" }, 401);
-      }
-
-      if (claims.role !== "host") {
-        return c.json({ error: "Only the host can start the game" }, 403);
-      }
-
-      const updated = await sessionService.startSession(sessionId, claims.sub);
-
-      if (!updated) {
-        return c.json({ error: "Cannot start game. Session may not be ready." }, 400);
-      }
-
-      const session = await sessionService.getSession(sessionId);
-      return c.json(session!);
-    },
-  )
-  .post(
-    "/:id/cancel",
+  .delete(
+    "/:id",
     describeRoute({
       tags: ["Sessions"],
       summary: "Cancel the session",
-      description: "Cancels the session. Both players are notified via SSE.",
+      description: "Ends the session for both players. Both players are notified via SSE.",
       responses: {
         200: {
           description: "Session cancelled",
@@ -285,42 +203,72 @@ export const sessionRoutes = new Hono()
       const session = await sessionService.getSession(sessionId);
       return c.json(session!);
     },
-  );
+  )
+  .get("/:id/events", async (c) => {
+    const sessionId = normalizeSessionId(c.req.param("id"));
+    const claims = await authenticateRequest(c, sessionId);
 
-// SSE on a separate instance — streaming responses can't flow through RPC types
-export const sessionSSEController = new Hono().get("/:id/events", async (c) => {
-  const sessionId = normalizeSessionId(c.req.param("id"));
-  const claims = await authenticateRequest(c, sessionId);
+    if (!claims) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
 
-  if (!claims) {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
+    const session = await sessionService.getSession(sessionId);
+    if (!session) {
+      return c.json({ error: "Session not found" }, 404);
+    }
 
-  const session = await sessionService.getSession(sessionId);
-  if (!session) {
-    return c.json({ error: "Session not found" }, 404);
-  }
+    const isParticipant = session.player_1_id === claims.sub || session.player_2_id === claims.sub;
+    if (!isParticipant) {
+      return c.json({ error: "Forbidden" }, 403);
+    }
 
-  const isParticipant = session.player_1_id === claims.sub || session.player_2_id === claims.sub;
-  if (!isParticipant) {
-    return c.json({ error: "Forbidden" }, 403);
-  }
+    await sessionService.registerConnection(sessionId, claims.sub);
 
-  return streamSSE(c, async (stream) => {
-    await stream.writeSSE({
-      event: "session_state",
-      data: JSON.stringify(session),
+    const currentSession = await sessionService.getSession(sessionId);
+    if (!currentSession) {
+      sessionService.releaseConnection(sessionId, claims.sub);
+      return c.json({ error: "Session not found" }, 404);
+    }
+
+    const matchState = await matchService.getMatchState(sessionId);
+
+    return streamSSE(c, async (stream) => {
+      await stream.writeSSE({
+        event: "session_state",
+        data: JSON.stringify(currentSession),
+      });
+
+      if (matchState) {
+        await stream.writeSSE({
+          event: "match_state",
+          data: JSON.stringify(matchState),
+        });
+      }
+
+      const unsubscribeSession = sessionEventBus.subscribe(sessionId, (event) => {
+        stream
+          .writeSSE({
+            event: event.type,
+            data: JSON.stringify(event.session),
+          })
+          .catch(() => {});
+      });
+
+      const unsubscribeMatch = gameEventBus.subscribe(sessionId, (event) => {
+        if (event.forPlayer && event.forPlayer !== claims.sub) return;
+
+        stream
+          .writeSSE({
+            event: event.type,
+            data: JSON.stringify(event.data),
+          })
+          .catch(() => {});
+      });
+
+      await runSSEKeepaliveLoop(stream, () => {
+        unsubscribeSession();
+        unsubscribeMatch();
+        sessionService.releaseConnection(sessionId, claims.sub);
+      });
     });
-
-    const unsubscribe = sessionEventBus.subscribe(sessionId, (event) => {
-      stream
-        .writeSSE({
-          event: event.type,
-          data: JSON.stringify(event.session),
-        })
-        .catch(() => {});
-    });
-
-    await runSSEKeepaliveLoop(stream, unsubscribe);
   });
-});

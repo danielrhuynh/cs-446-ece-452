@@ -1,8 +1,8 @@
-import { useMemo, type ReactNode } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import Animated, { FadeInDown } from "react-native-reanimated";
-import { Colors, Fonts, Spacing, BorderRadius, Layout, Shadows } from "@/constants/theme";
+import { BorderRadius, Colors, Fonts, Layout, Shadows, Spacing } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { setHasSeenTutorial } from "@/lib/storage";
 import { ScreenContainer } from "@/components/ui/screen-container";
@@ -10,56 +10,145 @@ import { LiquidGlass } from "@/components/ui/liquid-glass";
 import { Button } from "@/components/ui/button";
 import { BackButton } from "@/components/ui/back-button";
 
-function SectionIntro({
-  eyebrow,
-  title,
-  children,
-}: {
+interface TutorialScoreRow {
+  label: string;
+  body: string;
+  value: string;
+}
+
+interface TutorialStep {
   eyebrow: string;
   title: string;
-  children: ReactNode;
-}) {
+  summary: string;
+  bullets: string[];
+  scoreRows?: TutorialScoreRow[];
+}
+
+function buildTutorialSteps(openedFromHome: boolean): TutorialStep[] {
+  return [
+    {
+      eyebrow: openedFromHome ? "Refresher" : "Welcome",
+      title: openedFromHome ? "Backgammon in four short steps" : "Learn the basics before you play",
+      summary: "You only need the flow of the match. Appgammon handles legal moves on the board.",
+      bullets: [
+        "Matches are usually first to 3, 5, or 7 points.",
+        "Each game starts at 1 point.",
+        "You can replay this guide from Home any time.",
+      ],
+    },
+    {
+      eyebrow: "Movement",
+      title: "Move toward home and clear the bar first",
+      summary:
+        "Use both dice to move your checkers toward your home board. White moves counterclockwise and red moves clockwise.",
+      bullets: [
+        "Two or more opposing checkers on a point block that point.",
+        "A single opposing checker is a blot and can be hit.",
+        "If you have a checker on the bar, you must re-enter it before any other move.",
+      ],
+    },
+    {
+      eyebrow: "Scoring",
+      title: "Bearing off wins the game",
+      summary:
+        "When all of your checkers are in your home board, you can bear them off. The first player to clear every checker wins.",
+      bullets: [
+        "A normal win is worth 1 point.",
+        "If your opponent has not borne off any checker, it is worth 2 points.",
+        "If your opponent still has a checker on the bar or in your home board, it is worth 3 points.",
+      ],
+      scoreRows: [
+        {
+          label: "Single",
+          body: "Opponent has borne off at least one checker.",
+          value: "1",
+        },
+        {
+          label: "Gammon",
+          body: "Opponent has not borne off any checkers.",
+          value: "2",
+        },
+        {
+          label: "Backgammon",
+          body: "Opponent still has a checker on the bar or in your home board.",
+          value: "3",
+        },
+      ],
+    },
+    {
+      eyebrow: "Doubling",
+      title: "The cube raises the value of the game",
+      summary:
+        "Before rolling, you can offer a double. Your opponent accepts and play continues at double value, or passes and loses immediately.",
+      bullets: [
+        "The game starts at 1x.",
+        "Accepted doubles move the cube to 2x, 4x, and higher.",
+        "A backgammon at 4x is worth 12 points.",
+      ],
+    },
+  ];
+}
+
+function ProgressDots({ count, currentIndex }: { count: number; currentIndex: number }) {
   const colorScheme = useColorScheme() ?? "light";
   const colors = Colors[colorScheme];
+
   return (
-    <View style={styles.sectionIntro}>
-      <Text style={[styles.eyebrow, { color: colors.secondary }]}>{eyebrow}</Text>
-      <Text style={[styles.sectionTitle, { color: colors.text }]}>{title}</Text>
-      {children}
+    <View style={styles.progressTrack}>
+      {Array.from({ length: count }).map((_, index) => (
+        <View
+          key={`progress-${index}`}
+          style={[
+            styles.progressDot,
+            {
+              backgroundColor: index === currentIndex ? colors.primary : colors.border,
+            },
+          ]}
+        />
+      ))}
     </View>
   );
 }
 
-function BodyLine({ children }: { children: ReactNode }) {
-  const colorScheme = useColorScheme() ?? "light";
-  const colors = Colors[colorScheme];
-  return <Text style={[styles.body, { color: colors.text }]}>{children}</Text>;
-}
-
-function MutedLine({ children }: { children: ReactNode }) {
-  const colorScheme = useColorScheme() ?? "light";
-  const colors = Colors[colorScheme];
-  return <Text style={[styles.muted, { color: colors.textMuted }]}>{children}</Text>;
-}
-
 export default function TutorialScreen() {
   const router = useRouter();
+  const scrollRef = useRef<ScrollView>(null);
   const { source } = useLocalSearchParams<{ source?: string }>();
   const colorScheme = useColorScheme() ?? "light";
   const colors = Colors[colorScheme];
   const openedFromHome = source === "home";
-  const finishLabel = useMemo(
-    () => (openedFromHome ? "Done" : "Continue to App"),
-    [openedFromHome],
-  );
+  const tutorialSteps = buildTutorialSteps(openedFromHome);
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
 
-  const finishTutorial = async () => {
+  const currentStep = tutorialSteps[currentStepIndex];
+  const scoreRows = currentStep.scoreRows;
+  const isFirstStep = currentStepIndex === 0;
+  const isLastStep = currentStepIndex === tutorialSteps.length - 1;
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+  }, [currentStepIndex]);
+
+  const leaveTutorial = async () => {
     await setHasSeenTutorial(true);
     if (openedFromHome) {
       router.back();
       return;
     }
     router.replace("/");
+  };
+
+  const handleNext = async () => {
+    if (isLastStep) {
+      await leaveTutorial();
+      return;
+    }
+    setCurrentStepIndex((index) => index + 1);
+  };
+
+  const handleBack = () => {
+    if (isFirstStep) return;
+    setCurrentStepIndex((index) => index - 1);
   };
 
   return (
@@ -69,121 +158,103 @@ export default function TutorialScreen() {
           {openedFromHome ? (
             <BackButton onPress={() => router.back()} label="Home" />
           ) : (
-            <View style={styles.backPlaceholder} />
+            <Pressable
+              onPress={() => void leaveTutorial()}
+              accessibilityRole="button"
+              accessibilityLabel="Skip tutorial"
+              style={({ pressed }) => [styles.textAction, pressed && styles.pressed]}
+            >
+              <Text style={[styles.textActionLabel, { color: colors.textMuted }]}>Skip</Text>
+            </Pressable>
           )}
+
+          <Text style={[styles.stepCount, { color: colors.textMuted }]}>
+            {currentStepIndex + 1}/{tutorialSteps.length}
+          </Text>
         </View>
 
-        <Animated.View entering={FadeInDown.duration(280)} style={styles.hero}>
-          <Text style={[styles.heroTitle, { color: colors.text }]}>How Appgammon plays</Text>
-          <Text style={[styles.heroLead, { color: colors.textMuted }]}>
-            Learn how matches score, how games end, and how pieces move.
-          </Text>
-          <View style={[styles.heroRule, { backgroundColor: colors.border }]} />
-        </Animated.View>
-
         <ScrollView
+          ref={scrollRef}
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          <Animated.View entering={FadeInDown.delay(50).duration(320)}>
-            <LiquidGlass style={[styles.panel, Shadows.sm]}>
-              <SectionIntro eyebrow="Match" title="Reach the target score first">
-                <BodyLine>
-                  Your table picks a match length: first to 3, 5, or 7 points. Win games to earn
-                  points. Reach the target first and you win the match.
-                </BodyLine>
-              </SectionIntro>
-            </LiquidGlass>
-          </Animated.View>
+          <Animated.View
+            key={`step-${currentStepIndex}`}
+            entering={FadeInDown.duration(220)}
+            style={styles.contentWrap}
+          >
+            <View style={styles.hero}>
+              <Text style={[styles.eyebrow, { color: colors.secondary }]}>
+                {currentStep.eyebrow}
+              </Text>
+              <Text style={[styles.title, { color: colors.text }]}>{currentStep.title}</Text>
+              <Text style={[styles.summary, { color: colors.textMuted }]}>
+                {currentStep.summary}
+              </Text>
+              <ProgressDots count={tutorialSteps.length} currentIndex={currentStepIndex} />
+            </View>
 
-          <Animated.View entering={FadeInDown.delay(90).duration(320)}>
-            <LiquidGlass style={[styles.panel, Shadows.sm]}>
-              <SectionIntro
-                eyebrow="Finishing a game"
-                title="Bring your checkers home and bear them off"
-              >
-                <BodyLine>
-                  Move all of your checkers into your home board, then bear them off. The first
-                  player to clear every checker wins the game and scores from the table below.
-                </BodyLine>
-              </SectionIntro>
-
-              <View style={[styles.tableWrap, { borderColor: colors.border }]}>
-                <View style={[styles.tableRow, { borderBottomColor: colors.border }]}>
-                  <View style={styles.tableLabelCol}>
-                    <Text style={[styles.tableName, { color: colors.text }]}>Single</Text>
-                    <MutedLine>Your opponent bore off at least one checker.</MutedLine>
+            <LiquidGlass style={[styles.card, Shadows.sm]}>
+              <View style={styles.bulletList}>
+                {currentStep.bullets.map((bullet) => (
+                  <View key={bullet} style={styles.bulletRow}>
+                    <View style={[styles.bulletDot, { backgroundColor: colors.primary }]} />
+                    <Text style={[styles.bulletText, { color: colors.text }]}>{bullet}</Text>
                   </View>
-                  <Text style={[styles.tablePts, { color: colors.primary }]}>1</Text>
-                </View>
-                <View style={[styles.tableRow, { borderBottomColor: colors.border }]}>
-                  <View style={styles.tableLabelCol}>
-                    <Text style={[styles.tableName, { color: colors.text }]}>Gammon</Text>
-                    <MutedLine>Your opponent did not bear off any checkers.</MutedLine>
-                  </View>
-                  <Text style={[styles.tablePts, { color: colors.primary }]}>2</Text>
-                </View>
-                <View style={styles.tableRow}>
-                  <View style={styles.tableLabelCol}>
-                    <Text style={[styles.tableName, { color: colors.text }]}>Backgammon</Text>
-                    <MutedLine>
-                      Your opponent still has a checker on the bar or in your home board when you
-                      finish.
-                    </MutedLine>
-                  </View>
-                  <Text style={[styles.tablePts, { color: colors.primary }]}>3</Text>
-                </View>
+                ))}
               </View>
-            </LiquidGlass>
-          </Animated.View>
 
-          <Animated.View entering={FadeInDown.delay(130).duration(320)}>
-            <LiquidGlass style={[styles.panel, Shadows.sm]}>
-              <SectionIntro eyebrow="Doubling" title="Raise the stakes with the cube">
-                <BodyLine>
-                  Before you roll, you can offer a double. If your opponent accepts, the game keeps
-                  going at twice the current value. If they pass, you win the game at the current
-                  cube value.
-                </BodyLine>
-                <BodyLine>
-                  Players can redouble later. If the cube reaches 4, a backgammon is worth 12 points
-                  because 3 x 4 = 12.
-                </BodyLine>
-              </SectionIntro>
-            </LiquidGlass>
-          </Animated.View>
-
-          <Animated.View entering={FadeInDown.delay(170).duration(320)}>
-            <LiquidGlass style={[styles.panel, Shadows.sm]}>
-              <SectionIntro eyebrow="Board basics" title="Both players start from the same layout">
-                <BodyLine>
-                  Both players start with mirrored stacks on the 6, 8, 13, and 24 points. White
-                  moves counterclockwise toward home. Red moves clockwise.
-                </BodyLine>
-                <BodyLine>
-                  A point with two or more opposing checkers is closed. A point with one opposing
-                  checker is a blot. Hit it and that checker goes to the bar. A player with a
-                  checker on the bar must re-enter before making any other move.
-                </BodyLine>
-                <BodyLine>
-                  You can bear off only after all of your checkers are in your home board.
-                </BodyLine>
-                <MutedLine>The game screen shows the full board and legal moves.</MutedLine>
-              </SectionIntro>
+              {scoreRows ? (
+                <View style={[styles.scoreTable, { borderColor: colors.border }]}>
+                  {scoreRows.map((row, index) => (
+                    <View
+                      key={row.label}
+                      style={[
+                        styles.scoreRow,
+                        index < scoreRows.length - 1 && {
+                          borderBottomColor: colors.border,
+                          borderBottomWidth: 1,
+                        },
+                      ]}
+                    >
+                      <View style={styles.scoreCopy}>
+                        <Text style={[styles.scoreLabel, { color: colors.text }]}>{row.label}</Text>
+                        <Text style={[styles.scoreBody, { color: colors.textMuted }]}>
+                          {row.body}
+                        </Text>
+                      </View>
+                      <Text style={[styles.scoreValue, { color: colors.primary }]}>
+                        {row.value}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
             </LiquidGlass>
           </Animated.View>
         </ScrollView>
 
-        <Animated.View entering={FadeInDown.delay(200).duration(280)} style={styles.footer}>
+        <View style={styles.footer}>
+          {!isFirstStep ? (
+            <Pressable
+              onPress={handleBack}
+              accessibilityRole="button"
+              accessibilityLabel="Previous tutorial step"
+              style={({ pressed }) => [styles.backAction, pressed && styles.pressed]}
+            >
+              <Text style={[styles.backActionLabel, { color: colors.textMuted }]}>Back</Text>
+            </Pressable>
+          ) : null}
+
           <Button
-            title={finishLabel}
+            title={isLastStep ? (openedFromHome ? "Done" : "Start Playing") : "Next"}
             variant="primary"
-            fullWidth
             size="lg"
-            onPress={() => void finishTutorial()}
+            fullWidth
+            onPress={() => void handleNext()}
           />
-        </Animated.View>
+        </View>
       </View>
     </ScreenContainer>
   );
@@ -199,38 +270,28 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: Layout.contentMaxWidth,
     alignSelf: "center",
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: Spacing.md,
+  },
+  textAction: {
     minHeight: 44,
     justifyContent: "center",
+    paddingVertical: Spacing.sm,
+    paddingRight: Spacing.md,
   },
-  backPlaceholder: { height: 44 },
-  hero: {
-    width: "100%",
-    maxWidth: Layout.contentMaxWidth,
-    alignSelf: "center",
-    paddingTop: Spacing.sm,
-    paddingBottom: Spacing.md,
-    gap: Spacing.sm,
+  pressed: {
+    opacity: 0.7,
   },
-  heroTitle: {
-    fontFamily: Fonts.display,
-    fontSize: 28,
-    letterSpacing: -0.4,
-    alignSelf: "flex-start",
+  textActionLabel: {
+    fontFamily: Fonts.medium,
+    fontSize: 16,
   },
-  heroLead: {
+  stepCount: {
     fontFamily: Fonts.medium,
     fontSize: 15,
-    lineHeight: 22,
-    maxWidth: 520,
-    alignSelf: "flex-start",
-  },
-  heroRule: {
-    alignSelf: "flex-start",
-    width: 56,
-    height: 3,
-    borderRadius: 2,
-    marginTop: Spacing.xs,
-    opacity: 0.85,
   },
   scroll: {
     flex: 1,
@@ -239,74 +300,113 @@ const styles = StyleSheet.create({
     alignSelf: "center",
   },
   scrollContent: {
-    gap: Spacing.md,
     paddingBottom: Spacing.md,
   },
-  panel: {
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.lg,
+  contentWrap: {
     gap: Spacing.md,
   },
-  sectionIntro: {
-    gap: Spacing.xs,
+  hero: {
+    gap: Spacing.sm,
+    paddingTop: Spacing.xs,
   },
   eyebrow: {
     fontFamily: Fonts.semibold,
     fontSize: 11,
-    letterSpacing: 1.6,
+    letterSpacing: 1.4,
     textTransform: "uppercase",
   },
-  sectionTitle: {
-    fontFamily: Fonts.semibold,
-    fontSize: 19,
-    lineHeight: 24,
-    marginBottom: Spacing.xs,
+  title: {
+    fontFamily: Fonts.display,
+    fontSize: 30,
+    letterSpacing: -0.5,
   },
-  body: {
-    fontFamily: Fonts.sans,
+  summary: {
+    fontFamily: Fonts.medium,
     fontSize: 15,
-    lineHeight: 23,
+    lineHeight: 22,
   },
-  muted: {
-    fontFamily: Fonts.sans,
-    fontSize: 14,
-    lineHeight: 20,
-    marginTop: 2,
+  progressTrack: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    marginTop: Spacing.xs,
   },
-  tableWrap: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: BorderRadius.md,
-    overflow: "hidden",
+  progressDot: {
+    flex: 1,
+    height: 5,
+    borderRadius: BorderRadius.full,
   },
-  tableRow: {
+  card: {
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.lg,
+    gap: Spacing.md,
+  },
+  bulletList: {
+    gap: Spacing.md,
+  },
+  bulletRow: {
     flexDirection: "row",
     alignItems: "flex-start",
-    justifyContent: "space-between",
+    gap: Spacing.sm,
+  },
+  bulletDot: {
+    width: 8,
+    height: 8,
+    borderRadius: BorderRadius.full,
+    marginTop: 7,
+    flexShrink: 0,
+  },
+  bulletText: {
+    flex: 1,
+    fontFamily: Fonts.medium,
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  scoreTable: {
+    borderWidth: 1,
+    borderRadius: BorderRadius.lg,
+    overflow: "hidden",
+  },
+  scoreRow: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: Spacing.md,
     paddingVertical: Spacing.md,
     paddingHorizontal: Spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  tableLabelCol: {
+  scoreCopy: {
     flex: 1,
     gap: 4,
   },
-  tableName: {
+  scoreLabel: {
     fontFamily: Fonts.semibold,
     fontSize: 16,
   },
-  tablePts: {
+  scoreBody: {
+    fontFamily: Fonts.medium,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  scoreValue: {
     fontFamily: Fonts.display,
-    fontSize: 26,
-    lineHeight: 30,
-    minWidth: 36,
+    fontSize: 24,
+    minWidth: 22,
     textAlign: "right",
-    marginTop: 2,
   },
   footer: {
     width: "100%",
     maxWidth: Layout.contentMaxWidth,
     alignSelf: "center",
-    paddingTop: Spacing.sm,
+    gap: Spacing.sm,
+    paddingTop: Spacing.md,
+  },
+  backAction: {
+    alignSelf: "center",
+    minHeight: 32,
+    justifyContent: "center",
+    paddingHorizontal: Spacing.sm,
+  },
+  backActionLabel: {
+    fontFamily: Fonts.medium,
+    fontSize: 15,
   },
 });

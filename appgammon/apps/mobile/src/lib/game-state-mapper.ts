@@ -1,11 +1,11 @@
 /**
- * Maps server-side SeriesState/GameState (signed-int board, player UUIDs)
+ * Maps server-side MatchState/GameState (signed-int board, player UUIDs)
  * to the UI GameState (white/red per point, color-based).
  *
  * Convention: player1 = white (host), player2 = red (guest).
  */
 
-import type { SeriesState, PlayerColor, TurnPhase } from "@appgammon/common";
+import type { MatchState, PlayerColor, TurnPhase } from "@appgammon/common";
 import type { GameState as UIGameState, BoardState, LastEmote } from "@/types/game";
 import { INITIAL_BOARD } from "@/types/game";
 
@@ -36,13 +36,13 @@ function canPlayerProposeDouble(
 }
 
 export function mapServerToUIGameState(
-  seriesState: SeriesState,
+  matchState: MatchState,
   player1Id: string,
   myPlayerId: string,
   pendingDoubleProposal: boolean,
   lastEmote: LastEmote | null,
 ): UIGameState {
-  const game = seriesState.currentGame;
+  const game = matchState.currentGame;
 
   if (!game) {
     return {
@@ -53,10 +53,10 @@ export function mapServerToUIGameState(
       doublingCubeOwner: null,
       pendingDoubleProposal: false,
       matchScore: {
-        white: seriesState.player1Score,
-        red: seriesState.player2Score,
+        white: matchState.player1Score,
+        red: matchState.player2Score,
       },
-      matchLength: seriesState.bestOf as 3 | 5 | 7,
+      matchLength: matchState.targetScore as 3 | 5 | 7,
       lastEmote,
       canMove: false,
       canRoll: false,
@@ -86,10 +86,10 @@ export function mapServerToUIGameState(
     doublingCubeOwner: uuidToColor(game.cubeOwner, player1Id),
     pendingDoubleProposal,
     matchScore: {
-      white: seriesState.player1Score,
-      red: seriesState.player2Score,
+      white: matchState.player1Score,
+      red: matchState.player2Score,
     },
-    matchLength: seriesState.bestOf as 3 | 5 | 7,
+    matchLength: matchState.targetScore as 3 | 5 | 7,
     lastEmote,
     canMove: isMyTurn && game.turnPhase === "moving",
     canRoll: isMyTurn && waitingForRoll,

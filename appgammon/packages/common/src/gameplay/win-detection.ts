@@ -50,16 +50,16 @@ export function calculateGamePoints(
 }
 
 /**
- * Check if the series is complete.
- * best_of is the target score — a player wins when they reach that many points.
- * e.g. best_of=3 means first to 3 points wins.
+ * Check if the match is complete.
+ * targetScore is the score cap — a player wins when they reach that many points.
+ * e.g. targetScore=3 means first to 3 points wins.
  */
-export function checkSeriesComplete(
+export function checkMatchComplete(
   player1Score: number,
   player2Score: number,
-  bestOf: number,
+  targetScore: number,
 ): { complete: boolean; winner: PlayerRole | null } {
-  const winsNeeded = bestOf;
+  const winsNeeded = targetScore;
   if (player1Score >= winsNeeded) {
     return { complete: true, winner: "player1" };
   }

@@ -30,18 +30,17 @@ export const sessionResponse = z.object({
   status: z.enum(sessionStatusValues),
   player_1_id: z.string().uuid(),
   player_2_id: z.string().uuid().nullable(),
+  player_1_connected: z.boolean(),
+  player_2_connected: z.boolean(),
+  reconnect_deadline_at: z.string().nullable(),
   created_at: z.string(),
   player_1: playerInfoSchema,
   player_2: playerInfoSchema.nullable(),
 });
 
-export const sessionWithTokenResponse = z.object({
-  id: z.string(),
-  status: z.enum(sessionStatusValues),
-  player_1_id: z.string().uuid(),
-  player_2_id: z.string().uuid().nullable(),
-  created_at: z.string(),
+export const sessionWithTokenResponse = sessionResponse.extend({
   auth_token: z.string(),
+  role: z.enum(["host", "guest"]),
 });
 
 export const barSchema = z.object({
@@ -56,7 +55,7 @@ export const borneOffSchema = z.object({
 
 export const gameStateSchema = z.object({
   id: z.string().uuid(),
-  seriesId: z.string().uuid(),
+  matchId: z.string().uuid(),
   board: z.array(z.number().int()).length(24),
   bar: barSchema,
   borneOff: borneOffSchema,
@@ -71,10 +70,10 @@ export const gameStateSchema = z.object({
   winnerId: z.string().uuid().nullable(),
 });
 
-export const seriesStateSchema = z.object({
+export const matchStateSchema = z.object({
   id: z.string().uuid(),
   sessionId: z.string(),
-  bestOf: z.number().int(),
+  targetScore: z.number().int(),
   player1Score: z.number().int(),
   player2Score: z.number().int(),
   status: z.enum(["active", "complete"]),

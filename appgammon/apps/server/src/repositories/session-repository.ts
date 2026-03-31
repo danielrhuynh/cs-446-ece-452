@@ -1,7 +1,17 @@
-import { session_status, type SessionWithPlayers } from "@appgammon/common";
+import { session_status, type SessionRole, type SessionWithPlayers } from "@appgammon/common";
 import { db } from "../db/client";
 import { players, sessions } from "../db/schema";
-import { and, eq, isNull, ne, or } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, ne, or } from "drizzle-orm";
+
+const RECONNECT_GRACE_MS = 3 * 60 * 1000;
+
+type SessionRecord = typeof sessions.$inferSelect;
+
+export interface JoinSessionResult {
+  session: SessionRecord;
+  role: SessionRole;
+  joined: boolean;
+}
 
 function isMissingOnConflictConstraintError(error: unknown): boolean {
   return (
@@ -13,15 +23,61 @@ function isMissingOnConflictConstraintError(error: unknown): boolean {
 }
 
 export interface SessionRepository {
-  createSession(player1Id: string): Promise<typeof sessions.$inferSelect>;
-  joinSession(player2Id: string, sessionId: string): Promise<typeof sessions.$inferSelect | null>;
+  createSession(player1Id: string): Promise<SessionRecord>;
+  joinSession(playerId: string, sessionId: string): Promise<JoinSessionResult | null>;
   getSession(sessionId: string): Promise<SessionWithPlayers | null>;
-  startSession(
-    sessionId: string,
-    hostPlayerId: string,
-  ): Promise<typeof sessions.$inferSelect | null>;
-  cancelSession(sessionId: string, playerId: string): Promise<typeof sessions.$inferSelect | null>;
+  cancelSession(sessionId: string, playerId: string): Promise<SessionRecord | null>;
+  markPlayerConnected(sessionId: string, playerId: string): Promise<SessionWithPlayers | null>;
+  markPlayerDisconnected(sessionId: string, playerId: string): Promise<SessionWithPlayers | null>;
   getOrCreatePlayer(deviceId: string, name: string): Promise<typeof players.$inferSelect>;
+}
+
+function computeReconnectDeadline(session: SessionRecord) {
+  const disconnectedAt =
+    session.player_1_disconnected_at ?? session.player_2_disconnected_at ?? null;
+  if (!disconnectedAt) return null;
+
+  return new Date(disconnectedAt.getTime() + RECONNECT_GRACE_MS).toISOString();
+}
+
+async function mapSessionWithPlayers(session: SessionRecord): Promise<SessionWithPlayers> {
+  const player1Result = await db
+    .select({ name: players.name })
+    .from(players)
+    .where(eq(players.id, session.player_1_id));
+  let player2Name: string | null = null;
+
+  if (session.player_2_id) {
+    const player2Result = await db
+      .select({ name: players.name })
+      .from(players)
+      .where(eq(players.id, session.player_2_id));
+
+    if (player2Result.length > 0) {
+      player2Name = player2Result[0].name;
+    }
+  }
+
+  return {
+    id: session.id,
+    status: session.status as SessionWithPlayers["status"],
+    player_1_id: session.player_1_id,
+    player_2_id: session.player_2_id,
+    player_1_connected: session.player_1_disconnected_at === null,
+    player_2_connected: session.player_2_id !== null && session.player_2_disconnected_at === null,
+    reconnect_deadline_at: computeReconnectDeadline(session),
+    created_at: session.created_at.toISOString(),
+    player_1: {
+      id: session.player_1_id,
+      name: player1Result[0]?.name ?? null,
+    },
+    player_2: session.player_2_id
+      ? {
+          id: session.player_2_id,
+          name: player2Name,
+        }
+      : null,
+  } satisfies SessionWithPlayers;
 }
 
 export const drizzleSessionRepository: SessionRepository = {
@@ -37,91 +93,49 @@ export const drizzleSessionRepository: SessionRepository = {
     return session;
   },
 
-  async joinSession(player2Id, sessionId) {
-    const [session] = await db
+  async joinSession(playerId, sessionId) {
+    const [joinedSession] = await db
       .update(sessions)
       .set({
-        player_2_id: player2Id,
-        status: session_status.closed,
+        player_2_id: playerId,
+        status: session_status.ready,
       })
       .where(
         and(
           eq(sessions.id, sessionId),
           isNull(sessions.player_2_id),
-          ne(sessions.player_1_id, player2Id),
+          ne(sessions.player_1_id, playerId),
           eq(sessions.status, session_status.open),
         ),
       )
       .returning();
 
-    return session ?? null;
-  },
+    if (joinedSession) {
+      return { session: joinedSession, role: "guest", joined: true };
+    }
 
-  async getSession(sessionId) {
-    const result = await db
-      .select({
-        id: sessions.id,
-        status: sessions.status,
-        player_1_id: sessions.player_1_id,
-        player_2_id: sessions.player_2_id,
-        created_at: sessions.created_at,
-        player_1_name: players.name,
-      })
-      .from(sessions)
-      .leftJoin(players, eq(sessions.player_1_id, players.id))
-      .where(eq(sessions.id, sessionId));
+    const [session] = await db.select().from(sessions).where(eq(sessions.id, sessionId));
 
-    if (result.length === 0) {
+    if (!session || session.status === session_status.cancelled) {
       return null;
     }
 
-    const session = result[0];
-    let player2Name: string | null = null;
-
-    if (session.player_2_id) {
-      const player2Result = await db
-        .select({ name: players.name })
-        .from(players)
-        .where(eq(players.id, session.player_2_id));
-
-      if (player2Result.length > 0) {
-        player2Name = player2Result[0].name;
-      }
+    if (session.player_1_id === playerId) {
+      return { session, role: "host", joined: false };
     }
 
-    return {
-      id: session.id,
-      status: session.status as SessionWithPlayers["status"],
-      player_1_id: session.player_1_id,
-      player_2_id: session.player_2_id,
-      created_at: session.created_at.toISOString(),
-      player_1: {
-        id: session.player_1_id,
-        name: session.player_1_name,
-      },
-      player_2: session.player_2_id
-        ? {
-            id: session.player_2_id,
-            name: player2Name,
-          }
-        : null,
-    } satisfies SessionWithPlayers;
+    if (session.player_2_id === playerId) {
+      return { session, role: "guest", joined: false };
+    }
+
+    return null;
   },
 
-  async startSession(sessionId, hostPlayerId) {
-    const [session] = await db
-      .update(sessions)
-      .set({ status: session_status.in_game })
-      .where(
-        and(
-          eq(sessions.id, sessionId),
-          eq(sessions.status, session_status.closed),
-          eq(sessions.player_1_id, hostPlayerId),
-        ),
-      )
-      .returning();
+  async getSession(sessionId) {
+    const [session] = await db.select().from(sessions).where(eq(sessions.id, sessionId));
+    if (!session) return null;
 
-    return session ?? null;
+    return mapSessionWithPlayers(session);
   },
 
   async cancelSession(sessionId, playerId) {
@@ -131,17 +145,81 @@ export const drizzleSessionRepository: SessionRepository = {
       .where(
         and(
           eq(sessions.id, sessionId),
-          or(
-            eq(sessions.status, session_status.open),
-            eq(sessions.status, session_status.closed),
-            eq(sessions.status, session_status.in_game),
-          ),
+          or(eq(sessions.status, session_status.open), eq(sessions.status, session_status.ready)),
           or(eq(sessions.player_1_id, playerId), eq(sessions.player_2_id, playerId)),
         ),
       )
       .returning();
 
     return session ?? null;
+  },
+
+  async markPlayerConnected(sessionId, playerId) {
+    const [hostSession] = await db
+      .update(sessions)
+      .set({ player_1_disconnected_at: null })
+      .where(
+        and(
+          eq(sessions.id, sessionId),
+          eq(sessions.player_1_id, playerId),
+          isNotNull(sessions.player_1_disconnected_at),
+        ),
+      )
+      .returning();
+
+    if (hostSession) {
+      return mapSessionWithPlayers(hostSession);
+    }
+
+    const [guestSession] = await db
+      .update(sessions)
+      .set({ player_2_disconnected_at: null })
+      .where(
+        and(
+          eq(sessions.id, sessionId),
+          eq(sessions.player_2_id, playerId),
+          isNotNull(sessions.player_2_disconnected_at),
+        ),
+      )
+      .returning();
+
+    return guestSession ? mapSessionWithPlayers(guestSession) : null;
+  },
+
+  async markPlayerDisconnected(sessionId, playerId) {
+    const disconnectedAt = new Date();
+
+    const [hostSession] = await db
+      .update(sessions)
+      .set({ player_1_disconnected_at: disconnectedAt })
+      .where(
+        and(
+          eq(sessions.id, sessionId),
+          eq(sessions.player_1_id, playerId),
+          isNull(sessions.player_1_disconnected_at),
+          ne(sessions.status, session_status.cancelled),
+        ),
+      )
+      .returning();
+
+    if (hostSession) {
+      return mapSessionWithPlayers(hostSession);
+    }
+
+    const [guestSession] = await db
+      .update(sessions)
+      .set({ player_2_disconnected_at: disconnectedAt })
+      .where(
+        and(
+          eq(sessions.id, sessionId),
+          eq(sessions.player_2_id, playerId),
+          isNull(sessions.player_2_disconnected_at),
+          ne(sessions.status, session_status.cancelled),
+        ),
+      )
+      .returning();
+
+    return guestSession ? mapSessionWithPlayers(guestSession) : null;
   },
 
   async getOrCreatePlayer(deviceId, name) {

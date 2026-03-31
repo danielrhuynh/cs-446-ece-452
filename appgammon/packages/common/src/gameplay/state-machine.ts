@@ -5,18 +5,18 @@ import type {
   Dice,
   DiceUsed,
   GameState,
+  MatchState,
   PlayerRole,
-  SeriesState,
   TurnPhase,
 } from "../types";
 import { initializeDiceUsed } from "./dice";
 import { hasAnyLegalMove } from "./turn-validation";
-import { checkSeriesComplete, checkWin } from "./win-detection";
+import { checkMatchComplete, checkWin } from "./win-detection";
 
 export interface PersistableGameState extends Omit<GameState, "id"> {}
 
 export function createOpeningGameState(input: {
-  seriesId: string;
+  matchId: string;
   player1Id: string;
   player2Id: string;
   openingDice: Dice;
@@ -28,7 +28,7 @@ export function createOpeningGameState(input: {
   const firstPlayer = die1 > die2 ? input.player1Id : input.player2Id;
 
   return {
-    seriesId: input.seriesId,
+    matchId: input.matchId,
     board: input.initialBoard,
     bar: input.initialBar,
     borneOff: input.initialBorneOff,
@@ -50,25 +50,25 @@ export function determineWinnerRole(borneOff: BorneOff): PlayerRole | null {
   return null;
 }
 
-export function applySeriesPoints(input: {
+export function applyMatchPoints(input: {
   player1Score: number;
   player2Score: number;
-  bestOf: number;
+  targetScore: number;
   winnerRole: PlayerRole;
   points: number;
-}): Pick<SeriesState, "player1Score" | "player2Score" | "status" | "winnerId"> & {
+}): Pick<MatchState, "player1Score" | "player2Score" | "status" | "winnerId"> & {
   winnerRole: PlayerRole | null;
 } {
   const nextPlayer1Score = input.player1Score + (input.winnerRole === "player1" ? input.points : 0);
   const nextPlayer2Score = input.player2Score + (input.winnerRole === "player2" ? input.points : 0);
-  const seriesResult = checkSeriesComplete(nextPlayer1Score, nextPlayer2Score, input.bestOf);
+  const matchResult = checkMatchComplete(nextPlayer1Score, nextPlayer2Score, input.targetScore);
 
   return {
     player1Score: nextPlayer1Score,
     player2Score: nextPlayer2Score,
-    status: seriesResult.complete ? "complete" : "active",
+    status: matchResult.complete ? "complete" : "active",
     winnerId: null,
-    winnerRole: seriesResult.winner,
+    winnerRole: matchResult.winner,
   };
 }
 

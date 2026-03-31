@@ -2,8 +2,8 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { openAPIRouteHandler } from "hono-openapi";
 import { swaggerUI } from "@hono/swagger-ui";
-import { sessionRoutes, sessionSSEController } from "./controllers/session-controller";
-import { gameRoutes, gameSSEController } from "./controllers/game-controller";
+import { sessionRoutes } from "./controllers/session-controller";
+import { matchRoutes } from "./controllers/game-controller";
 import { logger } from "./utils/logger";
 
 const app = new Hono();
@@ -31,8 +31,6 @@ app.use(
   }),
 );
 
-app.get("/health", (c) => c.json({ ok: true }));
-
 app.get(
   "/openapi",
   openAPIRouteHandler(app, {
@@ -47,11 +45,12 @@ app.get(
     },
   }),
 );
+
 app.get("/docs", swaggerUI({ url: "/openapi" }));
 
-const routes = app.route("/sessions", sessionRoutes).route("/games", gameRoutes);
-app.route("/sessions", sessionSSEController);
-app.route("/games", gameSSEController);
+app.get("/health", (c) => c.json({ ok: true }));
+
+const routes = app.route("/sessions", sessionRoutes).route("/sessions", matchRoutes);
 
 export type AppType = typeof routes;
 export default app;

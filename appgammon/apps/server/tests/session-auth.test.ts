@@ -19,9 +19,9 @@ async function signTestToken(input: {
   return sign(
     {
       sub: input.playerId ?? "11111111-1111-4111-8111-111111111111",
-      sid: input.sessionId,
+      sessionId: input.sessionId,
       role: "host",
-      did: input.deviceId ?? "device-id-1234",
+      deviceId: input.deviceId ?? "device-id-1234",
       iat: now,
       exp: now + (input.expOffsetSeconds ?? 3600),
     },
@@ -42,7 +42,7 @@ describe("session auth hardening", () => {
     expect(res.status).toBe(401);
   });
 
-  it("returns 401 when token sid does not match requested session", async () => {
+  it("returns 401 when token sessionId does not match requested session", async () => {
     const token = await signTestToken({ sessionId: "ZZZ999" });
 
     const res = await app.request("/sessions/ABC123", {
@@ -56,7 +56,7 @@ describe("session auth hardening", () => {
     expect(res.status).toBe(401);
   });
 
-  it("returns 401 when device header does not match token did", async () => {
+  it("returns 401 when device header does not match token deviceId", async () => {
     const token = await signTestToken({
       sessionId: "ABC123",
       deviceId: "expected-device",

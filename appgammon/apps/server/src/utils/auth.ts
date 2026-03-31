@@ -1,11 +1,10 @@
 import { sign, verify } from "hono/jwt";
+import type { SessionRole } from "@appgammon/common";
 import { z } from "zod";
 import { deviceIdValueSchema, sessionIdValueSchema } from "../schemas/session";
 
-export type SessionRole = "host" | "guest";
-
 const sessionTokenPayloadSchema = z.object({
-  sub: z.string().uuid(),
+  sub: z.uuid(),
   sessionId: sessionIdValueSchema,
   role: z.enum(["host", "guest"]),
   deviceId: deviceIdValueSchema,

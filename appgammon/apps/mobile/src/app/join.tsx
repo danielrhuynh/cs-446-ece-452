@@ -20,7 +20,7 @@ import { Colors, Fonts, BorderRadius, Spacing, Layout, Shadows } from "@/constan
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useDeviceId } from "@/hooks/use-device-id";
 import { joinSession } from "@/lib/api";
-import { getDisplayName, setDisplayName, setAuthToken } from "@/lib/storage";
+import { getDisplayName, setActiveSession, setDisplayName, setAuthToken } from "@/lib/storage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CodeInput } from "@/components/ui/code-input";
@@ -148,13 +148,19 @@ export default function JoinSessionScreen() {
     try {
       const session = await joinSession(deviceId, resolvedDisplayName, sessionCode);
       await setAuthToken(session.auth_token);
+      await setActiveSession({
+        sessionId: session.id,
+        displayName: resolvedDisplayName,
+        isHost: session.role === "host",
+        targetScore: null,
+      });
 
       router.replace({
         pathname: "/lobby",
         params: {
           sessionId: session.id,
           displayName: resolvedDisplayName,
-          isHost: "false",
+          isHost: session.role === "host" ? "true" : "false",
         },
       });
     } catch (err) {

@@ -4,7 +4,7 @@ import {
   INITIAL_BOARD,
   INITIAL_BORNE_OFF,
   advanceTurnState,
-  applySeriesPoints,
+  applyMatchPoints,
   createOpeningGameState,
   type Bar,
   type Board,
@@ -27,7 +27,7 @@ function openBoard(): Board {
 describe("game state helpers", () => {
   it("creates the opening game state with the correct first player", () => {
     const game = createOpeningGameState({
-      seriesId: "series-1",
+      matchId: "match-1",
       player1Id: "player-1",
       player2Id: "player-2",
       openingDice: [6, 3],
@@ -43,11 +43,11 @@ describe("game state helpers", () => {
     expect(game.doublingCube).toBe(1);
   });
 
-  it("applies series points and marks the series complete at the target score", () => {
-    const result = applySeriesPoints({
+  it("applies match points and marks the match complete at the target score", () => {
+    const result = applyMatchPoints({
       player1Score: 2,
       player2Score: 0,
-      bestOf: 3,
+      targetScore: 3,
       winnerRole: "player1",
       points: 1,
     });

@@ -53,18 +53,18 @@ export type TurnPhase =
   | "turn_complete";
 
 export type GameStatus = "in_progress" | "complete";
-export type SeriesStatus = "active" | "complete";
+export type MatchStatus = "active" | "complete";
 
 export type ActionType = "move" | "roll" | "double_propose" | "double_accept" | "double_decline";
 
-export type GameEventType =
-  | "game_state"
+export type MatchEventType =
+  | "match_state"
   | "emote"
   | "double_proposed"
   | "double_accepted"
   | "double_declined"
   | "game_over"
-  | "series_complete";
+  | "match_complete";
 
 // ── Move ──
 
@@ -79,7 +79,7 @@ export interface Move {
 
 export interface GameState {
   id: string;
-  seriesId: string;
+  matchId: string;
   board: Board;
   bar: Bar;
   borneOff: BorneOff;
@@ -94,13 +94,13 @@ export interface GameState {
   winnerId: string | null;
 }
 
-export interface SeriesState {
+export interface MatchState {
   id: string;
   sessionId: string;
-  bestOf: number;
+  targetScore: number;
   player1Score: number;
   player2Score: number;
-  status: SeriesStatus;
+  status: MatchStatus;
   winnerId: string | null;
   currentGame: GameState | null;
 }

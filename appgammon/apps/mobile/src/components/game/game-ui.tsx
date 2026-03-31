@@ -1,14 +1,24 @@
 /** Game UI. */
 
-import { View, Text, StyleSheet } from "react-native";
-import { Colors, Fonts, Spacing } from "@/constants/theme";
+import { useEffect, useMemo, useState } from "react";
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
+import { BorderRadius, Colors, Fonts, Layout, Shadows, Spacing } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { BackgammonBoard } from "./backgammon-board";
 import { DiceDisplay } from "./dice-display";
 import { DoublingCube } from "./doubling-cube";
 import { EmoteArea } from "./emote-area";
 import { Button } from "@/components/ui/button";
-import type { GameState, PlayerColor, EmoteId } from "@/types/game";
+import {
+  EMOTES,
+  type GameState,
+  type PlayerColor,
+  type EmoteId,
+  type LastEmote,
+} from "@/types/game";
+
+const EMOTE_DURATION_MS = 2000;
 
 interface GameUIProps {
   gameState: GameState;
@@ -17,6 +27,8 @@ interface GameUIProps {
   player2Name?: string;
   onPointPress?: (pointIndex: number) => void;
   selectedPoint?: number | null;
+  hintedDestinations?: number[];
+  diceUsed?: boolean[] | null;
   onRollDice?: () => void;
   onSubmitMoves?: () => void;
   canSubmitMoves?: boolean;
@@ -24,8 +36,90 @@ interface GameUIProps {
   onProposeDouble?: () => void;
   onAcceptDouble?: () => void;
   onDeclineDouble?: () => void;
-  emotesMuted?: boolean;
-  onEmotesMutedChange?: (muted: boolean) => void;
+  showEmotes?: boolean;
+  showRaiseHint?: boolean;
+  onDismissRaiseHint?: () => void;
+}
+
+function ScoreEmoteToast({
+  lastEmote,
+  showEmotes,
+}: {
+  lastEmote: LastEmote | null;
+  showEmotes: boolean;
+}) {
+  const colorScheme = useColorScheme() ?? "light";
+  const colors = Colors[colorScheme];
+  const [visibleEmote, setVisibleEmote] = useState<LastEmote | null>(null);
+
+  useEffect(() => {
+    if (!lastEmote || !showEmotes) {
+      setVisibleEmote(null);
+      return;
+    }
+
+    setVisibleEmote(lastEmote);
+    const timeoutId = setTimeout(() => {
+      setVisibleEmote((current) => (current?.timestamp === lastEmote.timestamp ? null : current));
+    }, EMOTE_DURATION_MS);
+
+    return () => clearTimeout(timeoutId);
+  }, [lastEmote, showEmotes]);
+
+  const emote = useMemo(
+    () =>
+      visibleEmote ? (EMOTES.find((entry) => entry.id === visibleEmote.emoteId) ?? null) : null,
+    [visibleEmote],
+  );
+
+  return (
+    <View style={styles.eventOverlay} pointerEvents="none">
+      <View style={[styles.eventSlot, styles.eventSlotStart]}>
+        {visibleEmote?.fromPlayer === "white" && emote && (
+          <Animated.View
+            key={`${visibleEmote.emoteId}-${visibleEmote.timestamp}`}
+            entering={FadeIn.duration(150)}
+            exiting={FadeOut.duration(250)}
+            style={styles.toastWrap}
+          >
+            <View
+              style={[
+                styles.eventBubble,
+                Shadows.sm,
+                {
+                  backgroundColor: colors.primary,
+                },
+              ]}
+            >
+              <Text style={[styles.eventLabel, { color: colors.onPrimary }]}>{emote.label}</Text>
+            </View>
+          </Animated.View>
+        )}
+      </View>
+      <View style={[styles.eventSlot, styles.eventSlotEnd]}>
+        {visibleEmote?.fromPlayer === "red" && emote && (
+          <Animated.View
+            key={`${visibleEmote.emoteId}-${visibleEmote.timestamp}`}
+            entering={FadeIn.duration(150)}
+            exiting={FadeOut.duration(250)}
+            style={styles.toastWrap}
+          >
+            <View
+              style={[
+                styles.eventBubble,
+                Shadows.sm,
+                {
+                  backgroundColor: colors.accent,
+                },
+              ]}
+            >
+              <Text style={[styles.eventLabel, { color: colors.onPrimary }]}>{emote.label}</Text>
+            </View>
+          </Animated.View>
+        )}
+      </View>
+    </View>
+  );
 }
 
 export function GameUI({
@@ -35,6 +129,8 @@ export function GameUI({
   player2Name = "Player 2",
   onPointPress,
   selectedPoint,
+  hintedDestinations = [],
+  diceUsed,
   onRollDice,
   onSubmitMoves,
   canSubmitMoves = false,
@@ -42,34 +138,39 @@ export function GameUI({
   onProposeDouble,
   onAcceptDouble,
   onDeclineDouble,
-  emotesMuted = false,
-  onEmotesMutedChange,
+  showEmotes = true,
+  showRaiseHint = false,
+  onDismissRaiseHint,
 }: GameUIProps) {
   const colorScheme = useColorScheme() ?? "light";
   const colors = Colors[colorScheme];
 
   const whiteName = playerColor === "white" ? "You" : player1Name;
   const redName = playerColor === "red" ? "You" : player2Name;
+  const turnStatusText = gameState.currentPlayer === playerColor ? "Your turn" : "Opponent's turn";
 
   return (
     <View style={styles.container}>
       {/* Score */}
-      <View style={styles.scoreRow}>
-        <View style={styles.scoreItem}>
-          <View style={[styles.checkerDot, { backgroundColor: "#FAF7F2" }]} />
-          <Text style={[styles.scoreLabel, { color: colors.text }]}>{whiteName}</Text>
-          <Text style={[styles.scoreValue, { color: colors.primary }]}>
-            {gameState.matchScore.white}
-          </Text>
+      <View style={styles.scoreWrap}>
+        <View style={styles.scoreRow}>
+          <View style={styles.scoreItem}>
+            <View style={[styles.checkerDot, { backgroundColor: "#FAF7F2" }]} />
+            <Text style={[styles.scoreLabel, { color: colors.text }]}>{whiteName}</Text>
+            <Text style={[styles.scoreValue, { color: colors.primary }]}>
+              {gameState.matchScore.white}
+            </Text>
+          </View>
+          <Text style={[styles.scoreDivider, { color: colors.textMuted }]}>–</Text>
+          <View style={styles.scoreItem}>
+            <View style={[styles.checkerDot, { backgroundColor: "#8B0000" }]} />
+            <Text style={[styles.scoreLabel, { color: colors.text }]}>{redName}</Text>
+            <Text style={[styles.scoreValue, { color: colors.accent }]}>
+              {gameState.matchScore.red}
+            </Text>
+          </View>
         </View>
-        <Text style={[styles.scoreDivider, { color: colors.textMuted }]}>–</Text>
-        <View style={styles.scoreItem}>
-          <View style={[styles.checkerDot, { backgroundColor: "#8B0000" }]} />
-          <Text style={[styles.scoreLabel, { color: colors.text }]}>{redName}</Text>
-          <Text style={[styles.scoreValue, { color: colors.accent }]}>
-            {gameState.matchScore.red}
-          </Text>
-        </View>
+        <ScoreEmoteToast lastEmote={gameState.lastEmote} showEmotes={showEmotes} />
       </View>
 
       {/* Board */}
@@ -78,32 +179,56 @@ export function GameUI({
         playerColor={playerColor}
         onPointPress={onPointPress}
         selectedPoint={selectedPoint}
+        hintedDestinations={hintedDestinations}
       />
 
       {/* Controls */}
-      <View style={styles.controlsRow}>
-        <View style={styles.controlsSection}>
-          <DiceDisplay dice={gameState.dice} canRoll={gameState.canRoll} onRoll={onRollDice} />
-        </View>
-        <View style={styles.controlsSection}>
-          <DoublingCube
-            value={gameState.doublingCube}
-            owner={gameState.doublingCubeOwner}
-            pendingProposal={gameState.pendingDoubleProposal}
-            canPropose={gameState.canProposeDouble}
-            currentPlayer={gameState.currentPlayer}
-            onProposeDouble={onProposeDouble}
-            onAcceptDouble={onAcceptDouble}
-            onDeclineDouble={onDeclineDouble}
-          />
-        </View>
-        <View style={styles.controlsSection}>
-          <EmoteArea
-            lastEmote={gameState.lastEmote}
-            emotesMuted={emotesMuted}
-            onEmoteSelect={onEmoteSelect}
-            onMuteToggle={onEmotesMutedChange}
-          />
+      <View style={styles.controlsBlock}>
+        {showRaiseHint && onDismissRaiseHint && (
+          <View
+            style={[
+              styles.raiseHint,
+              {
+                backgroundColor: colors.cardBackground,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <Text style={[styles.raiseHintText, { color: colors.textMuted }]}>
+              Raise the stakes before rolling. Your opponent can accept or pass.
+            </Text>
+            <TouchableOpacity onPress={onDismissRaiseHint} activeOpacity={0.8}>
+              <Text style={[styles.raiseHintAction, { color: colors.primary }]}>Got it</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <View style={styles.controlsRow}>
+          <View style={styles.sideSlot}>
+            <DoublingCube
+              value={gameState.doublingCube}
+              owner={gameState.doublingCubeOwner}
+              pendingProposal={gameState.pendingDoubleProposal}
+              canPropose={gameState.canProposeDouble}
+              currentPlayer={gameState.currentPlayer}
+              onProposeDouble={onProposeDouble}
+              onAcceptDouble={onAcceptDouble}
+              onDeclineDouble={onDeclineDouble}
+            />
+          </View>
+          <View style={styles.diceSlot}>
+            <DiceDisplay
+              dice={gameState.dice}
+              diceUsed={diceUsed}
+              canRoll={gameState.canRoll}
+              canSubmit={canSubmitMoves}
+              turnStatusText={turnStatusText}
+              onRoll={onRollDice}
+            />
+          </View>
+          <View style={styles.sideSlot}>
+            <EmoteArea onEmoteSelect={onEmoteSelect} />
+          </View>
         </View>
       </View>
 
@@ -113,11 +238,6 @@ export function GameUI({
           <Button title="Submit Moves" variant="primary" size="md" onPress={onSubmitMoves} />
         </View>
       )}
-
-      {/* Turn indicator */}
-      <Text style={[styles.turnIndicator, { color: colors.textMuted }]}>
-        {gameState.currentPlayer === playerColor ? "Your turn" : "Opponent's turn"}
-      </Text>
     </View>
   );
 }
@@ -126,12 +246,20 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: Spacing.md,
+    alignItems: "center",
   },
   scoreRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: Spacing.lg,
+    width: "100%",
+    maxWidth: Layout.contentMaxWidth,
+  },
+  scoreWrap: {
+    width: "100%",
+    maxWidth: Layout.contentMaxWidth,
+    position: "relative",
     marginBottom: Spacing.md,
   },
   scoreItem: {
@@ -158,14 +286,76 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: Fonts.medium,
   },
+  eventOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  eventSlot: {
+    flex: 1,
+    justifyContent: "center",
+  },
+  eventSlotStart: {
+    alignItems: "flex-start",
+  },
+  eventSlotEnd: {
+    alignItems: "flex-end",
+  },
+  toastWrap: {
+    transform: [{ translateY: -28 }],
+  },
+  eventBubble: {
+    minWidth: 44,
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+  },
+  eventLabel: {
+    fontSize: 18,
+    fontFamily: Fonts.semibold,
+  },
+  controlsBlock: {
+    width: "100%",
+    maxWidth: Layout.contentMaxWidth,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.lg,
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  raiseHint: {
+    width: "100%",
+    borderWidth: 1,
+    borderRadius: BorderRadius.lg,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: Spacing.md,
+  },
+  raiseHintText: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: Fonts.medium,
+    lineHeight: 18,
+  },
+  raiseHintAction: {
+    fontSize: 12,
+    fontFamily: Fonts.semibold,
+  },
   controlsRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: Spacing.lg,
-    paddingHorizontal: Spacing.md,
+    width: "100%",
+    gap: Spacing.sm,
   },
-  controlsSection: {
+  sideSlot: {
+    width: 76,
+    alignItems: "center",
+  },
+  diceSlot: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
@@ -173,10 +363,7 @@ const styles = StyleSheet.create({
   submitRow: {
     alignItems: "center",
     paddingVertical: Spacing.sm,
-  },
-  turnIndicator: {
-    fontSize: 14,
-    fontFamily: Fonts.medium,
-    textAlign: "center",
+    width: "100%",
+    maxWidth: Layout.contentMaxWidth,
   },
 });
