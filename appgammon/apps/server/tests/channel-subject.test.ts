@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { ChannelSubject } from "../src/event-bus/event-bus";
+import { InMemorySubject } from "../src/event-bus/event-bus";
 
-describe("ChannelSubject", () => {
+describe("InMemorySubject", () => {
   it("notifies subscribed observers on the matching channel", async () => {
-    const subject = new ChannelSubject<string>();
+    const subject = new InMemorySubject<string>();
     const observer = { update: vi.fn() };
 
     subject.attach("session-1", observer);
@@ -13,13 +13,13 @@ describe("ChannelSubject", () => {
     expect(observer.update).toHaveBeenCalledWith("match_state");
   });
 
-  it("keeps channels isolated and supports unsubscribe", async () => {
-    const subject = new ChannelSubject<number>();
+  it("keeps channels isolated and supports explicit detach", async () => {
+    const subject = new InMemorySubject<number>();
     const observer = { update: vi.fn() };
 
-    const unsubscribe = subject.attach("session-1", observer);
+    subject.attach("session-1", observer);
     subject.notify("session-2", 1);
-    unsubscribe();
+    subject.detach("session-1", observer);
     subject.notify("session-1", 2);
     await Promise.resolve();
 

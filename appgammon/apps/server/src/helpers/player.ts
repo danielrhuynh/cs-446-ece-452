@@ -13,10 +13,3 @@ export function getPlayerRole(
 export function getOpponentId(role: PlayerRole, player1Id: string, player2Id: string): string {
   return role === "player1" ? player2Id : player1Id;
 }
-
-export function hasDisconnectedPlayer(input: {
-  player1Connected: boolean;
-  player2Connected: boolean;
-}) {
-  return !input.player1Connected || !input.player2Connected;
-}

@@ -78,8 +78,6 @@ describe("rollForTurn", () => {
       game,
       player1Id: "player-1",
       player2Id: "player-2",
-      player1Connected: true,
-      player2Connected: true,
     });
     mocks.hasAnyLegalMove.mockReturnValueOnce(false);
     mocks.rollDice

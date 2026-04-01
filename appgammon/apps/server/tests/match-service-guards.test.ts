@@ -13,8 +13,6 @@ function buildSessionPlayers(overrides: Partial<SessionPlayers> = {}): SessionPl
   return {
     player1Id: "player-1",
     player2Id: "player-2",
-    player1Connected: true,
-    player2Connected: true,
     ...overrides,
   };
 }
@@ -104,53 +102,16 @@ describe("match-service guards", () => {
     });
   });
 
-  it("rejects starting a match when a seated player is disconnected", async () => {
-    repo.getSessionPlayers.mockResolvedValue(
-      buildSessionPlayers({
-        player2Connected: false,
-      }),
-    );
+  it("rejects starting a match when the session is missing a guest", async () => {
+    repo.getSessionPlayers.mockResolvedValue(null);
 
     const result = await service.startMatch("ABC123", 3);
 
     expect(result).toEqual({
       success: false,
-      error: "Both players must be connected to start the match",
-      status: 409,
+      error: "Session not found or missing player 2",
+      status: 404,
     });
     expect(repo.createMatch).not.toHaveBeenCalled();
-  });
-
-  it("rejects move submission when a seated player is disconnected", async () => {
-    repo.getGameInSession.mockResolvedValue(
-      buildGameContext({
-        player2Connected: false,
-      }),
-    );
-
-    const result = await service.submitMoves("game-1", "player-1", 1, [], "ABC123");
-
-    expect(result).toEqual({
-      success: false,
-      error: "Cannot act while a player is disconnected",
-      status: 409,
-    });
-  });
-
-  it("rejects emotes when a seated player is disconnected", async () => {
-    repo.getSessionPlayers.mockResolvedValue(
-      buildSessionPlayers({
-        player1Connected: false,
-      }),
-    );
-
-    const result = await service.sendEmote("ABC123", "player-2", "gg");
-
-    expect(result).toEqual({
-      success: false,
-      error: "Cannot act while a player is disconnected",
-      status: 409,
-    });
-    expect(eventBus.publish).not.toHaveBeenCalled();
   });
 });

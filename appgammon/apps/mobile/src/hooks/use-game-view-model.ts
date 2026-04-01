@@ -43,9 +43,6 @@ export function useGameViewModel(sessionId: string | undefined, isHost: boolean)
   const myPlayerId = isHost ? (session?.player_1_id ?? "") : (session?.player_2_id ?? "");
   const playerColor: PlayerColour = isHost ? PLAYER_COLOUR.white : PLAYER_COLOUR.red;
   const myRole: PlayerRole = colorToRole(playerColor);
-  const opponentDisconnected = isHost
-    ? !!session?.player_2 && !session.player_2_connected
-    : !!session && !session.player_1_connected;
 
   const [pendingMoves, setPendingMoves] = useState<Move[]>([]);
   const [selectedPoint, setSelectedPoint] = useState<number | null>(null);
@@ -202,13 +199,13 @@ export function useGameViewModel(sessionId: string | undefined, isHost: boolean)
   }, [sessionId]);
 
   const rollCurrentTurn = useCallback(async () => {
-    if (!sessionId || !serverGame || opponentDisconnected) return;
+    if (!sessionId || !serverGame) return;
     await rollDice(sessionId, serverGame.id);
-  }, [opponentDisconnected, serverGame, sessionId]);
+  }, [serverGame, sessionId]);
 
   const selectPoint = useCallback(
     (pointIndex: number) => {
-      if (!serverGame || !workingState || !uiGameState?.canMove || opponentDisconnected) return;
+      if (!serverGame || !workingState || !uiGameState?.canMove) return;
       const dice = workingState.dice;
       const available = getAvailableDice(dice, workingState.diceUsed);
       if (available.length === 0) return;
@@ -294,11 +291,11 @@ export function useGameViewModel(sessionId: string | undefined, isHost: boolean)
 
       setSelectedPoint(null);
     },
-    [myRole, opponentDisconnected, selectedPoint, serverGame, uiGameState?.canMove, workingState],
+    [myRole, selectedPoint, serverGame, uiGameState?.canMove, workingState],
   );
 
   const submitPendingMoveSequence = useCallback(async () => {
-    if (!sessionId || !serverGame || pendingMoves.length === 0 || opponentDisconnected) return;
+    if (!sessionId || !serverGame || pendingMoves.length === 0) return;
 
     try {
       await submitMoves(sessionId, serverGame.id, serverGame.version, pendingMoves);
@@ -309,26 +306,26 @@ export function useGameViewModel(sessionId: string | undefined, isHost: boolean)
       setSelectedPoint(null);
       throw error;
     }
-  }, [opponentDisconnected, pendingMoves, serverGame, sessionId]);
+  }, [pendingMoves, serverGame, sessionId]);
 
   const proposeDoubleAction = useCallback(async () => {
-    if (!sessionId || !serverGame || opponentDisconnected) return;
+    if (!sessionId || !serverGame) return;
     await proposeDouble(sessionId, serverGame.id);
-  }, [opponentDisconnected, serverGame, sessionId]);
+  }, [serverGame, sessionId]);
 
   const acceptDoubleAction = useCallback(async () => {
-    if (!sessionId || !serverGame || opponentDisconnected) return;
+    if (!sessionId || !serverGame) return;
     await respondToDouble(sessionId, serverGame.id, "accept");
-  }, [opponentDisconnected, serverGame, sessionId]);
+  }, [serverGame, sessionId]);
 
   const declineDoubleAction = useCallback(async () => {
-    if (!sessionId || !serverGame || opponentDisconnected) return;
+    if (!sessionId || !serverGame) return;
     await respondToDouble(sessionId, serverGame.id, "decline");
-  }, [opponentDisconnected, serverGame, sessionId]);
+  }, [serverGame, sessionId]);
 
   const sendLocalEmote = useCallback(
     async (emoteId: EmoteId) => {
-      if (!sessionId || opponentDisconnected) return;
+      if (!sessionId) return;
 
       setLastEmote({ emoteId, fromPlayer: playerColor, timestamp: Date.now() });
       try {
@@ -337,7 +334,7 @@ export function useGameViewModel(sessionId: string | undefined, isHost: boolean)
         // Ignore send failures. The server still enforces rate limits.
       }
     },
-    [opponentDisconnected, playerColor, sessionId],
+    [playerColor, sessionId],
   );
 
   return {
@@ -347,15 +344,13 @@ export function useGameViewModel(sessionId: string | undefined, isHost: boolean)
     selectedPoint,
     hintedDestinations,
     diceUsed: workingState?.diceUsed ?? null,
-    opponentDisconnected,
-    reconnectDeadlineAt: session?.reconnect_deadline_at ?? null,
     shouldExitSession:
       lastSessionEvent === SESSION_EVENT_TYPE.cancelled ||
       session?.status === SESSION_STATUS.cancelled,
     gameOverInfo,
     matchCompleteInfo,
     isLoading: !session || !uiGameState,
-    canSubmitMoves: pendingMoves.length > 0 && !!uiGameState?.canMove && !opponentDisconnected,
+    canSubmitMoves: pendingMoves.length > 0 && !!uiGameState?.canMove,
     actions: {
       leaveSession,
       onPointPress: selectPoint,

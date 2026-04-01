@@ -1,10 +1,12 @@
 import type { SessionEventType, SessionWithPlayers } from "@appgammon/common";
-import { InMemorySubject } from "./event-bus";
+import { InMemorySubject, type Observer } from "./event-bus";
 
 export interface SessionEvent {
   type: SessionEventType;
   session: SessionWithPlayers;
 }
+
+export type SessionObserver = Observer<SessionEvent>;
 
 export class SessionEventBus {
   private readonly subject = new InMemorySubject<SessionEvent>();
@@ -16,8 +18,14 @@ export class SessionEventBus {
   subscribe(
     sessionId: string,
     callback: (event: SessionEvent) => void | Promise<void>,
-  ): () => void {
-    return this.subject.attach(sessionId, { update: callback });
+  ): SessionObserver {
+    const observer = { update: callback };
+    this.subject.attach(sessionId, observer);
+    return observer;
+  }
+
+  unsubscribe(sessionId: string, observer: SessionObserver): void {
+    this.subject.detach(sessionId, observer);
   }
 }
 

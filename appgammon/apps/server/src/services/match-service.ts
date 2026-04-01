@@ -25,13 +25,13 @@ import {
   type MatchGameContext,
 } from "../repositories/match-repository";
 import { logger } from "../utils/logger";
-import { getPlayerRole, getOpponentId, hasDisconnectedPlayer } from "../helpers/player";
+import { getPlayerRole, getOpponentId } from "../helpers/player";
 
 const lastEmoteTimestamp = new Map<string, number>();
 const EMOTE_COOLDOWN_MS = 3000;
 
 type MatchRepo = typeof matchRepo;
-type MatchEventBusPort = Pick<typeof matchEventBus, "publish" | "subscribe">;
+type MatchEventBusPort = Pick<typeof matchEventBus, "publish">;
 
 export class MatchService {
   private readonly matchRepo: MatchRepo;
@@ -58,13 +58,6 @@ export class MatchService {
         success: false,
         error: "Session not found or missing player 2",
         status: 404,
-      };
-    }
-    if (hasDisconnectedPlayer(players)) {
-      return {
-        success: false,
-        error: "Both players must be connected to start the match",
-        status: 409,
       };
     }
 
@@ -97,9 +90,6 @@ export class MatchService {
     if (!context) return { success: false, error: "Game not found for session", status: 404 };
 
     const { game, player1Id, player2Id } = context;
-    if (hasDisconnectedPlayer(context)) {
-      return { success: false, error: "Cannot act while a player is disconnected", status: 409 };
-    }
     if (game.version !== version) {
       return { success: false, error: "Version mismatch", status: 409 };
     }
@@ -183,9 +173,6 @@ export class MatchService {
     if (!context) return { success: false, error: "Game not found for session", status: 404 };
 
     const { game, player1Id, player2Id } = context;
-    if (hasDisconnectedPlayer(context)) {
-      return { success: false, error: "Cannot act while a player is disconnected", status: 409 };
-    }
     if (game.currentTurn !== playerId) {
       return { success: false, error: "Not your turn", status: 403 };
     }
@@ -228,9 +215,6 @@ export class MatchService {
     if (!context) return { success: false, error: "Game not found for session", status: 404 };
 
     const { game, player1Id, player2Id } = context;
-    if (hasDisconnectedPlayer(context)) {
-      return { success: false, error: "Cannot act while a player is disconnected", status: 409 };
-    }
     if (game.turnPhase !== "double_proposed") {
       return { success: false, error: "No double pending", status: 400 };
     }
@@ -319,9 +303,6 @@ export class MatchService {
     if (!players) {
       return { success: false, error: "Session not found or missing player 2", status: 404 };
     }
-    if (hasDisconnectedPlayer(players)) {
-      return { success: false, error: "Cannot act while a player is disconnected", status: 409 };
-    }
 
     const now = Date.now();
     const lastTime = lastEmoteTimestamp.get(playerId) ?? 0;
@@ -343,9 +324,6 @@ export class MatchService {
     if (!context) return { success: false, error: "Game not found for session", status: 404 };
 
     const { game, player1Id, player2Id } = context;
-    if (hasDisconnectedPlayer(context)) {
-      return { success: false, error: "Cannot act while a player is disconnected", status: 409 };
-    }
     if (game.currentTurn !== playerId) {
       return { success: false, error: "Not your turn", status: 403 };
     }

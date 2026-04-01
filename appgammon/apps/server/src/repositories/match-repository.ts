@@ -68,8 +68,6 @@ export const matchRepo = {
       .select({
         player_1_id: sessions.player_1_id,
         player_2_id: sessions.player_2_id,
-        player_1_disconnected_at: sessions.player_1_disconnected_at,
-        player_2_disconnected_at: sessions.player_2_disconnected_at,
         status: sessions.status,
       })
       .from(sessions)
@@ -82,8 +80,6 @@ export const matchRepo = {
     return {
       player1Id: session.player_1_id,
       player2Id: session.player_2_id,
-      player1Connected: session.player_1_disconnected_at === null,
-      player2Connected: session.player_2_disconnected_at === null,
     };
   },
 
@@ -93,8 +89,6 @@ export const matchRepo = {
         game: games,
         player1Id: sessions.player_1_id,
         player2Id: sessions.player_2_id,
-        player1DisconnectedAt: sessions.player_1_disconnected_at,
-        player2DisconnectedAt: sessions.player_2_disconnected_at,
       })
       .from(games)
       .innerJoin(matches, eq(games.match_id, matches.id))
@@ -113,8 +107,6 @@ export const matchRepo = {
       game: toGame(result.game),
       player1Id: result.player1Id,
       player2Id: result.player2Id,
-      player1Connected: result.player1DisconnectedAt === null,
-      player2Connected: result.player2DisconnectedAt === null,
     };
   },
 

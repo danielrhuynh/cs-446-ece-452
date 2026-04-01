@@ -31,9 +31,6 @@ export interface SessionWithPlayers {
   status: SessionStatus;
   player_1_id: string;
   player_2_id: string | null;
-  player_1_connected: boolean;
-  player_2_connected: boolean;
-  reconnect_deadline_at: string | null;
   created_at: string;
   player_1: PlayerInfo;
   player_2: PlayerInfo | null;

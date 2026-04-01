@@ -14,8 +14,8 @@ import {
   sessionResponse,
   sessionWithTokenResponse,
 } from "../schemas/openapi-responses";
-import { matchEventBus } from "../event-bus/match-event-bus";
-import { sessionEventBus } from "../event-bus/session-event-bus";
+import { matchEventBus, type MatchObserver } from "../event-bus/match-event-bus";
+import { sessionEventBus, type SessionObserver } from "../event-bus/session-event-bus";
 import { matchService } from "../services/match-service";
 import { sessionService } from "../services/session-service";
 import { signSessionToken, checkAuth } from "../utils/auth";
@@ -222,76 +222,61 @@ export const sessionRoutes = new Hono()
       return c.json({ error: "Forbidden" }, 403);
     }
 
-    await sessionService.registerConnection(sessionId, claims.sub);
+    const matchState = await matchService.getMatchState(sessionId);
 
-    let presenceReleased = false;
-    const releasePresence = () => {
-      if (presenceReleased) return;
-      presenceReleased = true;
-      sessionService.releaseConnection(sessionId, claims.sub);
-    };
-
-    try {
-      const currentSession = await sessionService.getSession(sessionId);
-      if (!currentSession) {
-        releasePresence();
-        return c.json({ error: "Session not found" }, 404);
-      }
-
-      const matchState = await matchService.getMatchState(sessionId);
-
-      return streamSSE(c, async (stream) => {
-        let unsubscribeSession = () => {};
-        let unsubscribeMatch = () => {};
-        let streamCleanedUp = false;
-        const cleanupStream = () => {
-          if (streamCleanedUp) return;
-          streamCleanedUp = true;
-          unsubscribeSession();
-          unsubscribeMatch();
-          releasePresence();
-        };
-
-        try {
-          await stream.writeSSE({
-            event: SESSION_EVENT_TYPE.state,
-            data: JSON.stringify(currentSession),
-          });
-
-          if (matchState) {
-            await stream.writeSSE({
-              event: MATCH_EVENT_TYPE.state,
-              data: JSON.stringify(matchState),
-            });
-          }
-
-          unsubscribeSession = sessionEventBus.subscribe(sessionId, (event) => {
-            stream
-              .writeSSE({
-                event: event.type,
-                data: JSON.stringify(event.session),
-              })
-              .catch(() => {});
-          });
-
-          unsubscribeMatch = matchEventBus.subscribe(sessionId, (event) => {
-            if (event.forPlayer && event.forPlayer !== claims.sub) return;
-
-            stream
-              .writeSSE({
-                event: event.type,
-                data: JSON.stringify(event.data),
-              })
-              .catch(() => {});
-          });
-
-          await runSSEKeepaliveLoop(stream, cleanupStream);
-        } finally {
-          cleanupStream();
+    return streamSSE(c, async (stream) => {
+      let sessionObserver: SessionObserver | null = null;
+      let matchObserver: MatchObserver | null = null;
+      let streamCleanedUp = false;
+      const cleanupStream = () => {
+        if (streamCleanedUp) return;
+        streamCleanedUp = true;
+        if (sessionObserver) {
+          sessionEventBus.unsubscribe(sessionId, sessionObserver);
+          sessionObserver = null;
         }
-      });
-    } catch (error) {
-      releasePresence();
-      throw error;
-    }
+        if (matchObserver) {
+          matchEventBus.unsubscribe(sessionId, matchObserver);
+          matchObserver = null;
+        }
+      };
+
+      try {
+        await stream.writeSSE({
+          event: SESSION_EVENT_TYPE.state,
+          data: JSON.stringify(session),
+        });
+
+        if (matchState) {
+          await stream.writeSSE({
+            event: MATCH_EVENT_TYPE.state,
+            data: JSON.stringify(matchState),
+          });
+        }
+
+        sessionObserver = sessionEventBus.subscribe(sessionId, (event) => {
+          stream
+            .writeSSE({
+              event: event.type,
+              data: JSON.stringify(event.session),
+            })
+            .catch(() => {});
+        });
+
+        matchObserver = matchEventBus.subscribe(sessionId, (event) => {
+          if (event.forPlayer && event.forPlayer !== claims.sub) return;
+
+          stream
+            .writeSSE({
+              event: event.type,
+              data: JSON.stringify(event.data),
+            })
+            .catch(() => {});
+        });
+
+        await runSSEKeepaliveLoop(stream, cleanupStream);
+      } finally {
+        cleanupStream();
+      }
+    });
   });

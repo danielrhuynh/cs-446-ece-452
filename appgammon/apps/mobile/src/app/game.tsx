@@ -34,23 +34,9 @@ import {
 import { LiquidGlass } from "@/components/ui/liquid-glass";
 import { ScreenContainer } from "@/components/ui/screen-container";
 import { BackButton } from "@/components/ui/back-button";
-import { Button } from "@/components/ui/button";
-import { SessionShareCard } from "@/components/ui/session-share-card";
 import { GameUI } from "@/components/game";
 
 const TURN_CHIME = require("../../assets/sounds/turn-chime.wav");
-
-function formatReconnectCountdown(deadline: string | null, now: number) {
-  if (!deadline) return "Waiting for them to reconnect.";
-
-  const remainingMs = Math.max(0, new Date(deadline).getTime() - now);
-  const minutes = Math.floor(remainingMs / 60_000);
-  const seconds = Math.floor((remainingMs % 60_000) / 1000);
-
-  return remainingMs > 0
-    ? `Seat reserved for ${minutes}:${String(seconds).padStart(2, "0")}.`
-    : "Grace period elapsed. You can keep waiting or leave the session.";
-}
 
 function GameMenuButton({ onPress }: { onPress: () => void }) {
   const colorScheme = useColorScheme() ?? "light";
@@ -173,8 +159,6 @@ export default function GameScreen() {
     selectedPoint,
     hintedDestinations,
     diceUsed,
-    opponentDisconnected,
-    reconnectDeadlineAt,
     shouldExitSession,
     gameOverInfo,
     matchCompleteInfo,
@@ -182,7 +166,6 @@ export default function GameScreen() {
     canSubmitMoves,
     actions,
   } = useGameViewModel(sessionId, isHostBool);
-  const [now, setNow] = useState(() => Date.now());
 
   const myPlayerId = isHostBool ? (session?.player_1_id ?? "") : (session?.player_2_id ?? "");
   const isMyTurn = !!uiGameState && uiGameState.currentPlayer === playerColor;
@@ -229,13 +212,6 @@ export default function GameScreen() {
       router.replace("/");
     }
   }, [router, shouldExitSession]);
-
-  useEffect(() => {
-    if (!opponentDisconnected) return;
-
-    const interval = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(interval);
-  }, [opponentDisconnected]);
 
   useEffect(() => {
     if (!gameOverInfo) return;
@@ -378,25 +354,6 @@ export default function GameScreen() {
             onDismissRaiseHint={handleDismissRaiseHint}
           />
         </ScrollView>
-
-        {opponentDisconnected ? (
-          <View style={styles.overlay}>
-            <LiquidGlass style={[styles.overlayCard, Shadows.md]}>
-              <Text style={[styles.overlayTitle, { color: colors.text }]}>
-                Opponent disconnected
-              </Text>
-              <Text style={[styles.overlayBody, { color: colors.textMuted }]}>
-                {formatReconnectCountdown(reconnectDeadlineAt, now)}
-              </Text>
-              <Text style={[styles.overlayHint, { color: colors.textMuted }]}>
-                Their seat is still reserved on the original device. You can wait here or end the
-                session.
-              </Text>
-              <SessionShareCard sessionId={sessionId} />
-              <Button fullWidth onPress={handleLeave} title="Leave Session" variant="outline" />
-            </LiquidGlass>
-          </View>
-        ) : null}
       </Animated.View>
       <GameMenuModal
         visible={showMenu}
@@ -488,28 +445,5 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingBottom: Spacing.xxl,
-  },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: "center",
-    padding: Spacing.lg,
-  },
-  overlayCard: {
-    borderRadius: BorderRadius.xl,
-    gap: Spacing.md,
-    padding: Spacing.lg,
-  },
-  overlayTitle: {
-    fontFamily: Fonts.display,
-    fontSize: 24,
-  },
-  overlayBody: {
-    fontFamily: Fonts.semibold,
-    fontSize: 16,
-  },
-  overlayHint: {
-    fontFamily: Fonts.medium,
-    fontSize: 14,
-    lineHeight: 20,
   },
 });

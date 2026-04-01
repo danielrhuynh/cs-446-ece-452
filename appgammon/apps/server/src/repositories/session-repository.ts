@@ -1,8 +1,7 @@
 import { SESSION_ROLE, SESSION_STATUS, type SessionWithPlayers } from "@appgammon/common";
 import { db } from "../db/client";
 import { players, sessions } from "../db/schema";
-import { and, eq, isNotNull, isNull, ne, or } from "drizzle-orm";
-const RECONNECT_GRACE_MS = 3 * 60 * 1000;
+import { and, eq, isNull, ne, or } from "drizzle-orm";
 
 function isMissingOnConflictConstraintError(error: unknown): boolean {
   return (
@@ -11,14 +10,6 @@ function isMissingOnConflictConstraintError(error: unknown): boolean {
     "code" in error &&
     (error as { code?: string }).code === "42P10"
   );
-}
-
-function reconnectDeadline(session: typeof sessions.$inferSelect) {
-  const disconnectedAt =
-    session.player_1_disconnected_at ?? session.player_2_disconnected_at ?? null;
-  return disconnectedAt
-    ? new Date(disconnectedAt.getTime() + RECONNECT_GRACE_MS).toISOString()
-    : null;
 }
 
 async function toSession(session: typeof sessions.$inferSelect): Promise<SessionWithPlayers> {
@@ -39,9 +30,6 @@ async function toSession(session: typeof sessions.$inferSelect): Promise<Session
     status: session.status as SessionWithPlayers["status"],
     player_1_id: session.player_1_id,
     player_2_id: session.player_2_id,
-    player_1_connected: session.player_1_disconnected_at === null,
-    player_2_connected: session.player_2_id !== null && session.player_2_disconnected_at === null,
-    reconnect_deadline_at: reconnectDeadline(session),
     created_at: session.created_at.toISOString(),
     player_1: { id: session.player_1_id, name: player1?.name ?? null },
     player_2: session.player_2_id ? { id: session.player_2_id, name: player2?.name ?? null } : null,
@@ -120,70 +108,6 @@ export const sessionRepo = {
       .returning();
 
     return session ?? null;
-  },
-
-  async connect(sessionId: string, playerId: string) {
-    const [hostSession] = await db
-      .update(sessions)
-      .set({ player_1_disconnected_at: null })
-      .where(
-        and(
-          eq(sessions.id, sessionId),
-          eq(sessions.player_1_id, playerId),
-          isNotNull(sessions.player_1_disconnected_at),
-        ),
-      )
-      .returning();
-
-    if (hostSession) return toSession(hostSession);
-
-    const [guestSession] = await db
-      .update(sessions)
-      .set({ player_2_disconnected_at: null })
-      .where(
-        and(
-          eq(sessions.id, sessionId),
-          eq(sessions.player_2_id, playerId),
-          isNotNull(sessions.player_2_disconnected_at),
-        ),
-      )
-      .returning();
-
-    return guestSession ? toSession(guestSession) : null;
-  },
-
-  async disconnect(sessionId: string, playerId: string) {
-    const disconnectedAt = new Date();
-
-    const [hostSession] = await db
-      .update(sessions)
-      .set({ player_1_disconnected_at: disconnectedAt })
-      .where(
-        and(
-          eq(sessions.id, sessionId),
-          eq(sessions.player_1_id, playerId),
-          isNull(sessions.player_1_disconnected_at),
-          ne(sessions.status, SESSION_STATUS.cancelled),
-        ),
-      )
-      .returning();
-
-    if (hostSession) return toSession(hostSession);
-
-    const [guestSession] = await db
-      .update(sessions)
-      .set({ player_2_disconnected_at: disconnectedAt })
-      .where(
-        and(
-          eq(sessions.id, sessionId),
-          eq(sessions.player_2_id, playerId),
-          isNull(sessions.player_2_disconnected_at),
-          ne(sessions.status, SESSION_STATUS.cancelled),
-        ),
-      )
-      .returning();
-
-    return guestSession ? toSession(guestSession) : null;
   },
 
   async upsertPlayer(deviceId: string, name: string) {
