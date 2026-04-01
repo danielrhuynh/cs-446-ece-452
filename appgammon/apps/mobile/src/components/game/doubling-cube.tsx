@@ -4,14 +4,14 @@ import { View, Text, Modal, Pressable, TouchableOpacity, StyleSheet } from "reac
 import { LinearGradient } from "expo-linear-gradient";
 import { Colors, BorderRadius, Fonts, Shadows, Spacing } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import type { PlayerColor } from "@/types/game";
+import type { PlayerColour } from "@/types/game";
 
 interface DoublingCubeProps {
   value: number;
-  owner: PlayerColor | null;
+  owner: PlayerColour | null;
   pendingProposal: boolean;
   canPropose: boolean;
-  currentPlayer: PlayerColor;
+  currentPlayer: PlayerColour;
   onProposeDouble?: () => void;
   onAcceptDouble?: () => void;
   onDeclineDouble?: () => void;

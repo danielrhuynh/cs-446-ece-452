@@ -10,8 +10,11 @@ import {
 import { mapServerToUIGameState } from "@/lib/game-state-mapper";
 import { clearActiveSession, clearAuthToken } from "@/lib/storage";
 import { useRoomEvents } from "./use-room-events";
-import type { EmoteId, LastEmote, PlayerColor } from "@/types/game";
+import type { EmoteId, LastEmote, PlayerColour } from "@/types/game";
 import {
+  PLAYER_COLOUR,
+  SESSION_EVENT_TYPE,
+  SESSION_STATUS,
   applyMove,
   colorToRole,
   getAvailableDice,
@@ -38,7 +41,7 @@ export function useGameViewModel(sessionId: string | undefined, isHost: boolean)
 
   const player1Id = session?.player_1_id ?? "";
   const myPlayerId = isHost ? (session?.player_1_id ?? "") : (session?.player_2_id ?? "");
-  const playerColor: PlayerColor = isHost ? "white" : "red";
+  const playerColor: PlayerColour = isHost ? PLAYER_COLOUR.white : PLAYER_COLOUR.red;
   const myRole: PlayerRole = colorToRole(playerColor);
   const opponentDisconnected = isHost
     ? !!session?.player_2 && !session.player_2_connected
@@ -50,7 +53,8 @@ export function useGameViewModel(sessionId: string | undefined, isHost: boolean)
 
   useEffect(() => {
     if (!sseEmote) return;
-    const fromColor: PlayerColor = sseEmote.fromPlayer === player1Id ? "white" : "red";
+    const fromColor: PlayerColour =
+      sseEmote.fromPlayer === player1Id ? PLAYER_COLOUR.white : PLAYER_COLOUR.red;
     setLastEmote({
       emoteId: sseEmote.emoteId as EmoteId,
       fromPlayer: fromColor,
@@ -345,7 +349,9 @@ export function useGameViewModel(sessionId: string | undefined, isHost: boolean)
     diceUsed: workingState?.diceUsed ?? null,
     opponentDisconnected,
     reconnectDeadlineAt: session?.reconnect_deadline_at ?? null,
-    shouldExitSession: lastSessionEvent === "session_cancelled" || session?.status === "cancelled",
+    shouldExitSession:
+      lastSessionEvent === SESSION_EVENT_TYPE.cancelled ||
+      session?.status === SESSION_STATUS.cancelled,
     gameOverInfo,
     matchCompleteInfo,
     isLoading: !session || !uiGameState,

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ChannelSubject } from "../src/event-bus/channel-subject";
+import { ChannelSubject } from "../src/event-bus/event-bus";
 
 describe("ChannelSubject", () => {
   it("notifies subscribed observers on the matching channel", async () => {

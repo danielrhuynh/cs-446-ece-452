@@ -1,6 +1,5 @@
 /**
  * Canonical game types for backgammon engine.
- * Used by both server and client.
  *
  * Board: 24-element signed integer array.
  *   Positive values = player1 checkers, negative = player2 checkers.
@@ -9,7 +8,6 @@
  */
 
 // ── Primitives ──
-
 export type Board = number[];
 
 export interface Bar {
@@ -25,7 +23,12 @@ export interface BorneOff {
 export type Dice = [number, number];
 export type DiceUsed = boolean[];
 
-export type PlayerRole = "player1" | "player2";
+export const PLAYER_ROLE = {
+  player1: "player1",
+  player2: "player2",
+} as const;
+
+export type PlayerRole = (typeof PLAYER_ROLE)[keyof typeof PLAYER_ROLE];
 
 /**
  * Turn phase state machine:
@@ -46,28 +49,52 @@ export type PlayerRole = "player1" | "player2";
  *
  * On game start, the opening roll skips straight to "moving".
  */
-export type TurnPhase =
-  | "waiting_for_roll_or_double"
-  | "double_proposed"
-  | "moving"
-  | "turn_complete";
+export const TURN_PHASE = {
+  waitingForRollOrDouble: "waiting_for_roll_or_double",
+  doubleProposed: "double_proposed",
+  moving: "moving",
+  turnComplete: "turn_complete",
+} as const;
 
-export type GameStatus = "in_progress" | "complete";
-export type MatchStatus = "active" | "complete";
+export type TurnPhase = (typeof TURN_PHASE)[keyof typeof TURN_PHASE];
 
-export type ActionType = "move" | "roll" | "double_propose" | "double_accept" | "double_decline";
+export const GAME_STATUS = {
+  inProgress: "in_progress",
+  complete: "complete",
+} as const;
 
-export type MatchEventType =
-  | "match_state"
-  | "emote"
-  | "double_proposed"
-  | "double_accepted"
-  | "double_declined"
-  | "game_over"
-  | "match_complete";
+export type GameStatus = (typeof GAME_STATUS)[keyof typeof GAME_STATUS];
+
+export const MATCH_STATUS = {
+  active: "active",
+  complete: "complete",
+} as const;
+
+export type MatchStatus = (typeof MATCH_STATUS)[keyof typeof MATCH_STATUS];
+
+export const ACTION_TYPE = {
+  move: "move",
+  roll: "roll",
+  doublePropose: "double_propose",
+  doubleAccept: "double_accept",
+  doubleDecline: "double_decline",
+} as const;
+
+export type ActionType = (typeof ACTION_TYPE)[keyof typeof ACTION_TYPE];
+
+export const MATCH_EVENT_TYPE = {
+  state: "match_state",
+  emote: "emote",
+  doubleProposed: "double_proposed",
+  doubleAccepted: "double_accepted",
+  doubleDeclined: "double_declined",
+  gameOver: "game_over",
+  matchComplete: "match_complete",
+} as const;
+
+export type MatchEventType = (typeof MATCH_EVENT_TYPE)[keyof typeof MATCH_EVENT_TYPE];
 
 // ── Move ──
-
 export interface Move {
   /** Point index to move from. -1 = entering from bar. */
   from: number;
@@ -76,7 +103,6 @@ export interface Move {
 }
 
 // ── Game State (what server stores / returns) ──
-
 export interface GameState {
   id: string;
   matchId: string;
@@ -117,31 +143,43 @@ export const INITIAL_BORNE_OFF: BorneOff = { player1: 0, player2: 0 };
 
 export const CHECKERS_PER_PLAYER = 15;
 
-// ── Player color mapping ──
+// ── Player colour mapping ──
 
 /**
- * Player role ↔ color mapping:
+ * Player role ↔ colour mapping:
  *   player1 = "white" (positive board values), moves 0→23
  *   player2 = "red"   (negative board values), moves 23→0
  */
-export type PlayerColor = "white" | "red";
+export const PLAYER_COLOUR = {
+  white: "white",
+  red: "red",
+} as const;
 
-export function roleToColor(role: PlayerRole): PlayerColor {
-  return role === "player1" ? "white" : "red";
+export type PlayerColour = (typeof PLAYER_COLOUR)[keyof typeof PLAYER_COLOUR];
+
+export function roleToColor(role: PlayerRole): PlayerColour {
+  return role === PLAYER_ROLE.player1 ? PLAYER_COLOUR.white : PLAYER_COLOUR.red;
 }
 
-export function colorToRole(color: PlayerColor): PlayerRole {
-  return color === "white" ? "player1" : "player2";
+export function colorToRole(color: PlayerColour): PlayerRole {
+  return color === PLAYER_COLOUR.white ? PLAYER_ROLE.player1 : PLAYER_ROLE.player2;
 }
 
 // ── Emotes ──
+export const EMOTE_ID = {
+  thumbsUp: "thumbs_up",
+  gg: "gg",
+  oops: "oops",
+  thinking: "thinking",
+  niceMove: "nice_move",
+} as const;
 
-export type EmoteId = "thumbs_up" | "gg" | "oops" | "thinking" | "nice_move";
+export type EmoteId = (typeof EMOTE_ID)[keyof typeof EMOTE_ID];
 
-export const EMOTES: { id: EmoteId; label: string }[] = [
-  { id: "thumbs_up", label: "👍" },
-  { id: "gg", label: "GG" },
-  { id: "oops", label: "😅" },
-  { id: "thinking", label: "🤔" },
-  { id: "nice_move", label: "🔥" },
-];
+export const EMOTES = [
+  { id: EMOTE_ID.thumbsUp, label: "👍" },
+  { id: EMOTE_ID.gg, label: "GG" },
+  { id: EMOTE_ID.oops, label: "😅" },
+  { id: EMOTE_ID.thinking, label: "🤔" },
+  { id: EMOTE_ID.niceMove, label: "🔥" },
+] satisfies ReadonlyArray<{ id: EmoteId; label: string }>;

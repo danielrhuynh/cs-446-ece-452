@@ -12,11 +12,11 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Point } from "./point";
 import { Bar } from "./bar";
 import { BearOffTray } from "./bear-off-tray";
-import type { BoardState, PlayerColor } from "@/types/game";
+import type { BoardState, PlayerColour } from "@/types/game";
 
 interface BackgammonBoardProps {
   board: BoardState;
-  playerColor: PlayerColor;
+  playerColor: PlayerColour;
   onPointPress?: (pointIndex: number) => void;
   selectedPoint?: number | null;
   hintedDestinations?: number[];

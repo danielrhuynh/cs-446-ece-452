@@ -1,13 +1,10 @@
 import {
+  SESSION_EVENT_TYPE,
   type SessionEventType,
-  type SessionRole,
   type SessionWithPlayers,
 } from "@appgammon/common";
-import { sessionEventBus, type SessionEventBus } from "../event-bus/session-event-bus";
-import {
-  drizzleSessionRepository,
-  type SessionRepository,
-} from "../repositories/session-repository";
+import { sessionEventBus } from "../event-bus/session-event-bus";
+import { sessionRepo } from "../repositories/session-repository";
 import { logger } from "../utils/logger";
 
 const DISCONNECT_DEBOUNCE_MS = 10_000;
@@ -17,39 +14,37 @@ interface PresenceEntry {
   timer: ReturnType<typeof setTimeout> | null;
 }
 
-export interface SessionJoinResult {
-  session: SessionWithPlayers;
-  role: SessionRole;
-}
+type SessionRepo = typeof sessionRepo;
+type SessionEventBusPort = Pick<typeof sessionEventBus, "publish" | "subscribe">;
 
-/**
- * Session service acting as a facade over persistence and real-time notifications.
- * Controllers talk to one cohesive object instead of coordinating
- * repositories and event delivery themselves.
- */
 export class SessionService {
   private readonly presenceByPlayer = new Map<string, PresenceEntry>();
+  private readonly sessionRepo: SessionRepo;
+  private readonly eventBus: SessionEventBusPort;
 
   constructor(
-    private readonly sessionRepository: SessionRepository = drizzleSessionRepository,
-    private readonly eventBus: SessionEventBus = sessionEventBus,
-  ) {}
+    sessionRepository: SessionRepo = sessionRepo,
+    eventBus: SessionEventBusPort = sessionEventBus,
+  ) {
+    this.sessionRepo = sessionRepository;
+    this.eventBus = eventBus;
+  }
 
   async createSession(player1Id: string) {
-    const session = await this.sessionRepository.createSession(player1Id);
+    const session = await this.sessionRepo.create(player1Id);
     logger.info({ session }, "[SESSION] Creating new session");
     return session;
   }
 
-  async joinSession(playerId: string, sessionId: string): Promise<SessionJoinResult | null> {
-    const result = await this.sessionRepository.joinSession(playerId, sessionId);
+  async joinSession(playerId: string, sessionId: string) {
+    const result = await this.sessionRepo.join(playerId, sessionId);
 
     if (!result) {
       logger.info("[SESSION] Could not join session");
       return null;
     }
 
-    const session = await this.sessionRepository.getSession(result.session.id);
+    const session = await this.sessionRepo.get(result.sessionId);
     if (!session) {
       logger.info("[SESSION] Joined session but failed to reload mapped session");
       return null;
@@ -61,18 +56,18 @@ export class SessionService {
     );
 
     if (result.joined) {
-      await this.publishSessionEvent(sessionId, "session_ready");
+      this.eventBus.publish(sessionId, { type: SESSION_EVENT_TYPE.ready, session });
     }
 
     return { session, role: result.role };
   }
 
   async getSession(sessionId: string): Promise<SessionWithPlayers | null> {
-    return this.sessionRepository.getSession(sessionId);
+    return this.sessionRepo.get(sessionId);
   }
 
   async cancelSession(sessionId: string, playerId: string) {
-    const session = await this.sessionRepository.cancelSession(sessionId, playerId);
+    const session = await this.sessionRepo.cancel(sessionId, playerId);
 
     if (!session) {
       logger.info("[SESSION] Could not cancel session");
@@ -80,12 +75,12 @@ export class SessionService {
     }
 
     logger.info({ session }, "[SESSION] Cancelled session");
-    await this.publishSessionEvent(sessionId, "session_cancelled");
+    await this.publishSessionEvent(sessionId, SESSION_EVENT_TYPE.cancelled);
     return session;
   }
 
   async getOrCreatePlayer(deviceId: string, name: string) {
-    const player = await this.sessionRepository.getOrCreatePlayer(deviceId, name);
+    const player = await this.sessionRepo.upsertPlayer(deviceId, name);
     logger.info({ player }, "[SESSION] Upserted player by device_id");
     return player;
   }
@@ -102,10 +97,10 @@ export class SessionService {
     entry.connections += 1;
     this.presenceByPlayer.set(key, entry);
 
-    const session = await this.sessionRepository.markPlayerConnected(sessionId, playerId);
+    const session = await this.sessionRepo.connect(sessionId, playerId);
     if (session) {
       logger.info({ sessionId, playerId }, "[SESSION] Player reconnected");
-      this.publishSessionSnapshot(session, "session_state");
+      this.publishSessionSnapshot(session, SESSION_EVENT_TYPE.state);
     }
   }
 
@@ -138,11 +133,11 @@ export class SessionService {
     }
 
     entry.timer = null;
-    const session = await this.sessionRepository.markPlayerDisconnected(sessionId, playerId);
+    const session = await this.sessionRepo.disconnect(sessionId, playerId);
 
     if (session) {
       logger.info({ sessionId, playerId }, "[SESSION] Player disconnected");
-      this.publishSessionSnapshot(session, "session_state");
+      this.publishSessionSnapshot(session, SESSION_EVENT_TYPE.state);
     }
 
     if (entry.connections === 0 && entry.timer === null) {
@@ -159,7 +154,7 @@ export class SessionService {
   }
 
   private async publishSessionEvent(sessionId: string, type: SessionEventType) {
-    const session = await this.sessionRepository.getSession(sessionId);
+    const session = await this.sessionRepo.get(sessionId);
     if (!session) return;
 
     this.publishSessionSnapshot(session, type);

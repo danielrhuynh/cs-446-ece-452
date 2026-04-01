@@ -19,7 +19,7 @@ import Svg, { Polygon } from "react-native-svg";
 import { Colors, Fonts, Spacing } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Checker } from "./checker";
-import type { PointState as PointStateType, PlayerColor } from "@/types/game";
+import type { PointState as PointStateType, PlayerColour } from "@/types/game";
 
 interface PointProps {
   pointIndex: number;
@@ -31,7 +31,7 @@ interface PointProps {
   checkerSize: number;
   selected?: boolean;
   hinted?: boolean;
-  hintColor?: PlayerColor;
+  hintColor?: PlayerColour;
   onPress?: () => void;
 }
 
@@ -180,7 +180,7 @@ export function Point({
     </View>
   );
 
-  function renderCheckers(count: number, color: PlayerColor) {
+  function renderCheckers(count: number, color: PlayerColour) {
     const stack = [];
     const visibleCheckers = count > maxVisible ? maxVisible - 1 : count;
 

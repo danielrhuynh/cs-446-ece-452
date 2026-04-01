@@ -6,10 +6,10 @@
 import { View, StyleSheet } from "react-native";
 import { Shadows } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import type { PlayerColor } from "@/types/game";
+import type { PlayerColour } from "@/types/game";
 
 interface CheckerProps {
-  color: PlayerColor;
+  color: PlayerColour;
   size?: number;
 }
 

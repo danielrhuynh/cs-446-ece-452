@@ -1,11 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { GameEventBus } from "../src/event-bus/game-event-bus";
-import type {
-  GameRepository,
-  SessionGameContext,
-  SessionPlayers,
-} from "../src/repositories/game-repository";
-import { MatchService } from "../src/services/game-service";
+import { matchRepo } from "../src/repositories/match-repository";
+import type { MatchGameContext, SessionPlayers } from "../src/repositories/match-repository";
+import { MatchService } from "../src/services/match-service";
 
 vi.mock("../src/utils/logger", () => ({
   logger: {
@@ -23,7 +19,7 @@ function buildSessionPlayers(overrides: Partial<SessionPlayers> = {}): SessionPl
   };
 }
 
-function buildGameContext(overrides: Partial<SessionGameContext> = {}): SessionGameContext {
+function buildGameContext(overrides: Partial<MatchGameContext> = {}): MatchGameContext {
   return {
     game: {
       id: "game-1",
@@ -46,7 +42,7 @@ function buildGameContext(overrides: Partial<SessionGameContext> = {}): SessionG
   };
 }
 
-describe("game-service guards", () => {
+describe("match-service guards", () => {
   const repo = {
     getSessionPlayers: vi.fn(),
     getGameInSession: vi.fn(),
@@ -59,18 +55,18 @@ describe("game-service guards", () => {
     updateMatch: vi.fn(),
     countMoves: vi.fn(),
     appendMoves: vi.fn(),
-  } satisfies Record<keyof GameRepository, ReturnType<typeof vi.fn>>;
+  } satisfies Record<keyof typeof matchRepo, ReturnType<typeof vi.fn>>;
 
   const eventBus = {
     publish: vi.fn(),
     subscribe: vi.fn(),
-  } satisfies GameEventBus;
+  };
 
   let service: MatchService;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    service = new MatchService(repo as unknown as GameRepository, eventBus);
+    service = new MatchService(repo as unknown as typeof matchRepo, eventBus);
     repo.getActiveMatch.mockResolvedValue(null);
     repo.getSessionPlayers.mockResolvedValue(buildSessionPlayers());
   });

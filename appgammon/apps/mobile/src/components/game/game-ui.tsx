@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import {
   EMOTES,
   type GameState,
-  type PlayerColor,
+  type PlayerColour,
   type EmoteId,
   type LastEmote,
 } from "@/types/game";
@@ -22,7 +22,7 @@ const EMOTE_DURATION_MS = 2000;
 
 interface GameUIProps {
   gameState: GameState;
-  playerColor: PlayerColor;
+  playerColor: PlayerColour;
   player1Name?: string;
   player2Name?: string;
   onPointPress?: (pointIndex: number) => void;

@@ -1,15 +1,25 @@
-import type { MatchEventType } from "./game";
+export const SESSION_STATUS = {
+  open: "open",
+  ready: "ready",
+  cancelled: "cancelled",
+} as const;
 
-export enum session_status {
-  open = "open",
-  ready = "ready",
-  cancelled = "cancelled",
-}
+export type SessionStatus = (typeof SESSION_STATUS)[keyof typeof SESSION_STATUS];
 
-export type SessionRole = "host" | "guest";
+export const SESSION_ROLE = {
+  host: "host",
+  guest: "guest",
+} as const;
 
-export type SessionEventType = "session_state" | "session_ready" | "session_cancelled";
-export type RoomEventType = SessionEventType | MatchEventType;
+export type SessionRole = (typeof SESSION_ROLE)[keyof typeof SESSION_ROLE];
+
+export const SESSION_EVENT_TYPE = {
+  state: "session_state",
+  ready: "session_ready",
+  cancelled: "session_cancelled",
+} as const;
+
+export type SessionEventType = (typeof SESSION_EVENT_TYPE)[keyof typeof SESSION_EVENT_TYPE];
 
 export interface PlayerInfo {
   id: string;
@@ -18,7 +28,7 @@ export interface PlayerInfo {
 
 export interface SessionWithPlayers {
   id: string;
-  status: session_status;
+  status: SessionStatus;
   player_1_id: string;
   player_2_id: string | null;
   player_1_connected: boolean;

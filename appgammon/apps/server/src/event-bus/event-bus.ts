@@ -1,10 +1,23 @@
-import type { Observer, Subject } from "./observer";
+/**
+ * Observer pattern as defined in the lecture content.
+ * https://pengyunie.github.io/cs446-1261/docs/lectures/design-patterns/behavioral/#observer
+ */
+interface Observer<T> {
+  update(event: T): void | Promise<void>;
+}
+
+interface Subject<T> {
+  attach(channel: string, observer: Observer<T>): () => void;
+  detach(channel: string, observer: Observer<T>): void;
+  notify(channel: string, event: T): void;
+}
 
 /**
- * In-memory subject that manages observers per session/game channel.
- * This makes the Observer pattern explicit instead of hiding it behind callbacks.
+ * An in-memory implementation for the observer pattern. This can be swapped for
+ * other implementations, say using Redis for this, allowing for distributing the
+ * events accross multiple backend instances.
  */
-export class ChannelSubject<T> implements Subject<T> {
+export class InMemorySubject<T> implements Subject<T> {
   private readonly observers = new Map<string, Set<Observer<T>>>();
 
   attach(channel: string, observer: Observer<T>): () => void {
@@ -39,3 +52,5 @@ export class ChannelSubject<T> implements Subject<T> {
     }
   }
 }
+
+export { InMemorySubject as ChannelSubject };

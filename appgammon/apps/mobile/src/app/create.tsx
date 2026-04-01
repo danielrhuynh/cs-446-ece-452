@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { View, Text, StyleSheet, Alert, Share, TouchableOpacity } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { SESSION_EVENT_TYPE, SESSION_STATUS } from "@appgammon/common";
 import * as Linking from "expo-linking";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
@@ -123,7 +124,10 @@ export default function CreateSessionScreen() {
     if (navigatedRef.current) return;
     const latestSession = sseSession ?? session;
 
-    if (lastSessionEvent === "session_cancelled" || latestSession?.status === "cancelled") {
+    if (
+      lastSessionEvent === SESSION_EVENT_TYPE.cancelled ||
+      latestSession?.status === SESSION_STATUS.cancelled
+    ) {
       void clearActiveSession();
       void clearAuthToken();
       navigatedRef.current = true;
@@ -132,7 +136,9 @@ export default function CreateSessionScreen() {
     }
 
     const shouldEnterLobby =
-      !!latestSession && (lastSessionEvent === "session_ready" || latestSession.status === "ready");
+      !!latestSession &&
+      (lastSessionEvent === SESSION_EVENT_TYPE.ready ||
+        latestSession.status === SESSION_STATUS.ready);
 
     if (shouldEnterLobby) {
       navigatedRef.current = true;

@@ -46,7 +46,11 @@ export class ApiError extends Error {
   }
 }
 
-async function unwrap<T>(res: { ok: boolean; status: number; json(): Promise<unknown> }): Promise<T> {
+async function unwrap<T>(res: {
+  ok: boolean;
+  status: number;
+  json(): Promise<unknown>;
+}): Promise<T> {
   let data: unknown;
   try {
     data = await res.json();

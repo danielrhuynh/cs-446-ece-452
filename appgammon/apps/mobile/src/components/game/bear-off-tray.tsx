@@ -18,11 +18,11 @@ import Animated, {
 import { Colors, Fonts, Spacing } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Checker } from "./checker";
-import type { BorneOffState, PlayerColor } from "@/types/game";
+import type { BorneOffState, PlayerColour } from "@/types/game";
 
 interface BearOffTrayProps {
   borneOff: BorneOffState;
-  playerColor: PlayerColor;
+  playerColor: PlayerColour;
   checkerSize: number;
   height: number;
   onPress?: (pointIndex: number) => void;

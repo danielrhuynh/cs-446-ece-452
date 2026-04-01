@@ -1,8 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { GameState } from "@appgammon/common";
-import type { GameEventBus } from "../src/event-bus/game-event-bus";
-import type { GameRepository } from "../src/repositories/game-repository";
-import { MatchService } from "../src/services/game-service";
+import { matchRepo } from "../src/repositories/match-repository";
+import { MatchService } from "../src/services/match-service";
 
 const mocks = vi.hoisted(() => ({
   rollDice: vi.fn(),
@@ -39,18 +38,18 @@ describe("rollForTurn", () => {
     updateMatch: vi.fn(),
     countMoves: vi.fn(),
     appendMoves: vi.fn(),
-  } satisfies Record<keyof GameRepository, ReturnType<typeof vi.fn>>;
+  } satisfies Record<keyof typeof matchRepo, ReturnType<typeof vi.fn>>;
 
   const eventBus = {
     publish: vi.fn(),
     subscribe: vi.fn(),
-  } satisfies GameEventBus;
+  };
 
   let service: MatchService;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    service = new MatchService(repo as unknown as GameRepository, eventBus);
+    service = new MatchService(repo as unknown as typeof matchRepo, eventBus);
     repo.getActiveMatch.mockResolvedValue(null);
   });
 

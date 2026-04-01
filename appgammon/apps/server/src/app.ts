@@ -3,7 +3,7 @@ import { cors } from "hono/cors";
 import { openAPIRouteHandler } from "hono-openapi";
 import { swaggerUI } from "@hono/swagger-ui";
 import { sessionRoutes } from "./controllers/session-controller";
-import { matchRoutes } from "./controllers/game-controller";
+import { matchRoutes } from "./controllers/match-controller";
 import { logger } from "./utils/logger";
 
 const app = new Hono();
@@ -47,8 +47,6 @@ app.get(
 );
 
 app.get("/docs", swaggerUI({ url: "/openapi" }));
-
-app.get("/health", (c) => c.json({ ok: true }));
 
 const routes = app.route("/sessions", sessionRoutes).route("/sessions", matchRoutes);
 

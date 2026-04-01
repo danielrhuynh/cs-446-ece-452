@@ -1,12 +1,13 @@
 import { Hono } from "hono";
 import { sValidator } from "@hono/standard-validator";
 import { describeRoute } from "hono-openapi";
+import { SESSION_ROLE } from "@appgammon/common";
 import {
   doubleActionPayloadSchema,
   emotePayloadSchema,
   startMatchPayloadSchema,
   submitMovesPayloadSchema,
-} from "../schemas/game";
+} from "../schemas/match";
 import { normalizeSessionId } from "../schemas/session";
 import {
   jsonSchema,
@@ -14,8 +15,8 @@ import {
   matchStateSchema,
   okResponse,
 } from "../schemas/openapi-responses";
-import { authenticateRequest } from "../middleware/auth";
-import { matchService } from "../services/game-service";
+import { matchService } from "../services/match-service";
+import { checkAuth } from "../utils/auth";
 
 export const matchRoutes = new Hono()
   .post(
@@ -50,13 +51,13 @@ export const matchRoutes = new Hono()
     sValidator("json", startMatchPayloadSchema),
     async (c) => {
       const sessionId = normalizeSessionId(c.req.param("id"));
-      const claims = await authenticateRequest(c, sessionId);
+      const claims = await checkAuth(c, sessionId);
 
       if (!claims) {
         return c.json({ error: "Unauthorized" }, 401);
       }
 
-      if (claims.role !== "host") {
+      if (claims.role !== SESSION_ROLE.host) {
         return c.json({ error: "Only the host can start a match" }, 403);
       }
 
@@ -93,7 +94,7 @@ export const matchRoutes = new Hono()
     }),
     async (c) => {
       const sessionId = normalizeSessionId(c.req.param("id"));
-      const claims = await authenticateRequest(c, sessionId);
+      const claims = await checkAuth(c, sessionId);
 
       if (!claims) {
         return c.json({ error: "Unauthorized" }, 401);
@@ -137,7 +138,7 @@ export const matchRoutes = new Hono()
     sValidator("json", submitMovesPayloadSchema),
     async (c) => {
       const sessionId = normalizeSessionId(c.req.param("id"));
-      const claims = await authenticateRequest(c, sessionId);
+      const claims = await checkAuth(c, sessionId);
 
       if (!claims) {
         return c.json({ error: "Unauthorized" }, 401);
@@ -182,7 +183,7 @@ export const matchRoutes = new Hono()
     sValidator("json", doubleActionPayloadSchema),
     async (c) => {
       const sessionId = normalizeSessionId(c.req.param("id"));
-      const claims = await authenticateRequest(c, sessionId);
+      const claims = await checkAuth(c, sessionId);
 
       if (!claims) {
         return c.json({ error: "Unauthorized" }, 401);
@@ -229,7 +230,7 @@ export const matchRoutes = new Hono()
     }),
     async (c) => {
       const sessionId = normalizeSessionId(c.req.param("id"));
-      const claims = await authenticateRequest(c, sessionId);
+      const claims = await checkAuth(c, sessionId);
 
       if (!claims) {
         return c.json({ error: "Unauthorized" }, 401);
@@ -274,7 +275,7 @@ export const matchRoutes = new Hono()
     sValidator("json", emotePayloadSchema),
     async (c) => {
       const sessionId = normalizeSessionId(c.req.param("id"));
-      const claims = await authenticateRequest(c, sessionId);
+      const claims = await checkAuth(c, sessionId);
 
       if (!claims) {
         return c.json({ error: "Unauthorized" }, 401);

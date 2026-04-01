@@ -1,5 +1,5 @@
 import { pgTable, uuid, text, timestamp, varchar, integer, jsonb } from "drizzle-orm/pg-core";
-import { session_status } from "@appgammon/common";
+import { GAME_STATUS, MATCH_STATUS, SESSION_STATUS, TURN_PHASE } from "@appgammon/common";
 import { generateId } from "../utils/id";
 
 export const players = pgTable("players", {
@@ -13,7 +13,7 @@ export const sessions = pgTable("sessions", {
   id: varchar("id", { length: 6 })
     .primaryKey()
     .$defaultFn(() => generateId()),
-  status: text("status").notNull().default(session_status.open),
+  status: text("status").notNull().default(SESSION_STATUS.open),
   player_1_id: uuid("player1_id")
     .references(() => players.id)
     .notNull(),
@@ -31,7 +31,7 @@ export const matches = pgTable("matches", {
   target_score: integer("target_score").notNull(),
   player1_score: integer("player1_score").notNull().default(0),
   player2_score: integer("player2_score").notNull().default(0),
-  status: text("status").notNull().default("active"),
+  status: text("status").notNull().default(MATCH_STATUS.active),
   winner_id: uuid("winner_id").references(() => players.id),
   created_at: timestamp("created_at").defaultNow().notNull(),
 });
@@ -47,13 +47,13 @@ export const games = pgTable("games", {
   current_turn: uuid("current_turn")
     .references(() => players.id)
     .notNull(),
-  turn_phase: text("turn_phase").notNull().default("waiting_for_roll_or_double"),
+  turn_phase: text("turn_phase").notNull().default(TURN_PHASE.waitingForRollOrDouble),
   dice: jsonb("dice"),
   dice_used: jsonb("dice_used"),
   doubling_cube: integer("doubling_cube").notNull().default(1),
   cube_owner: uuid("cube_owner").references(() => players.id),
   version: integer("version").notNull().default(1),
-  status: text("status").notNull().default("in_progress"),
+  status: text("status").notNull().default(GAME_STATUS.inProgress),
   winner_id: uuid("winner_id").references(() => players.id),
   created_at: timestamp("created_at").defaultNow().notNull(),
   updated_at: timestamp("updated_at").defaultNow().notNull(),

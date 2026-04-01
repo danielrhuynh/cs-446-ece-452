@@ -5,13 +5,19 @@
  * Convention: player1 = white (host), player2 = red (guest).
  */
 
-import type { MatchState, PlayerColor, TurnPhase } from "@appgammon/common";
+import {
+  PLAYER_COLOUR,
+  TURN_PHASE,
+  type MatchState,
+  type PlayerColour as PlayerColourType,
+  type TurnPhase as TurnPhaseType,
+} from "@appgammon/common";
 import type { GameState as UIGameState, BoardState, LastEmote } from "@/types/game";
 import { INITIAL_BOARD } from "@/types/game";
 
-function uuidToColor(uuid: string | null, player1Id: string): PlayerColor | null {
+function uuidToColor(uuid: string | null, player1Id: string): PlayerColourType | null {
   if (!uuid) return null;
-  return uuid === player1Id ? "white" : "red";
+  return uuid === player1Id ? PLAYER_COLOUR.white : PLAYER_COLOUR.red;
 }
 
 function boardFromServer(board: number[]): BoardState["points"] {
@@ -22,14 +28,14 @@ function boardFromServer(board: number[]): BoardState["points"] {
 }
 
 function canPlayerProposeDouble(
-  turnPhase: TurnPhase,
+  turnPhase: TurnPhaseType,
   currentTurnId: string,
   myPlayerId: string,
   cubeOwner: string | null,
   doublingCube: number,
 ): boolean {
   if (currentTurnId !== myPlayerId) return false;
-  if (turnPhase !== "waiting_for_roll_or_double") return false;
+  if (turnPhase !== TURN_PHASE.waitingForRollOrDouble) return false;
   if (doublingCube >= 64) return false;
   if (cubeOwner !== null && cubeOwner !== myPlayerId) return false;
   return true;
@@ -47,7 +53,7 @@ export function mapServerToUIGameState(
   if (!game) {
     return {
       board: INITIAL_BOARD,
-      currentPlayer: "white",
+      currentPlayer: PLAYER_COLOUR.white,
       dice: null,
       doublingCube: 1,
       doublingCubeOwner: null,
@@ -65,8 +71,8 @@ export function mapServerToUIGameState(
   }
 
   const isMyTurn = game.currentTurn === myPlayerId;
-  const currentPlayer = uuidToColor(game.currentTurn, player1Id) ?? "white";
-  const waitingForRoll = game.turnPhase === "waiting_for_roll_or_double";
+  const currentPlayer = uuidToColor(game.currentTurn, player1Id) ?? PLAYER_COLOUR.white;
+  const waitingForRoll = game.turnPhase === TURN_PHASE.waitingForRollOrDouble;
 
   return {
     board: {
@@ -91,7 +97,7 @@ export function mapServerToUIGameState(
     },
     matchLength: matchState.targetScore as 3 | 5 | 7,
     lastEmote,
-    canMove: isMyTurn && game.turnPhase === "moving",
+    canMove: isMyTurn && game.turnPhase === TURN_PHASE.moving,
     canRoll: isMyTurn && waitingForRoll,
     canProposeDouble: canPlayerProposeDouble(
       game.turnPhase,

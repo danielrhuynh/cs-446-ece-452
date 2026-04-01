@@ -1,13 +1,17 @@
-import type {
-  Bar,
-  Board,
-  BorneOff,
-  Dice,
-  DiceUsed,
-  GameState,
-  MatchState,
-  PlayerRole,
-  TurnPhase,
+import {
+  GAME_STATUS,
+  MATCH_STATUS,
+  PLAYER_ROLE,
+  TURN_PHASE,
+  type PlayerRole,
+  type TurnPhase,
+  type Bar,
+  type Board,
+  type BorneOff,
+  type Dice,
+  type DiceUsed,
+  type GameState,
+  type MatchState,
 } from "../types";
 import { initializeDiceUsed } from "./dice";
 import { hasAnyLegalMove } from "./turn-validation";
@@ -33,20 +37,20 @@ export function createOpeningGameState(input: {
     bar: input.initialBar,
     borneOff: input.initialBorneOff,
     currentTurn: firstPlayer,
-    turnPhase: "moving",
+    turnPhase: TURN_PHASE.moving,
     dice: input.openingDice,
     diceUsed: initializeDiceUsed(input.openingDice),
     doublingCube: 1,
     cubeOwner: null,
     version: 1,
-    status: "in_progress",
+    status: GAME_STATUS.inProgress,
     winnerId: null,
   };
 }
 
 export function determineWinnerRole(borneOff: BorneOff): PlayerRole | null {
-  if (checkWin(borneOff, "player1")) return "player1";
-  if (checkWin(borneOff, "player2")) return "player2";
+  if (checkWin(borneOff, PLAYER_ROLE.player1)) return PLAYER_ROLE.player1;
+  if (checkWin(borneOff, PLAYER_ROLE.player2)) return PLAYER_ROLE.player2;
   return null;
 }
 
@@ -59,14 +63,16 @@ export function applyMatchPoints(input: {
 }): Pick<MatchState, "player1Score" | "player2Score" | "status" | "winnerId"> & {
   winnerRole: PlayerRole | null;
 } {
-  const nextPlayer1Score = input.player1Score + (input.winnerRole === "player1" ? input.points : 0);
-  const nextPlayer2Score = input.player2Score + (input.winnerRole === "player2" ? input.points : 0);
+  const nextPlayer1Score =
+    input.player1Score + (input.winnerRole === PLAYER_ROLE.player1 ? input.points : 0);
+  const nextPlayer2Score =
+    input.player2Score + (input.winnerRole === PLAYER_ROLE.player2 ? input.points : 0);
   const matchResult = checkMatchComplete(nextPlayer1Score, nextPlayer2Score, input.targetScore);
 
   return {
     player1Score: nextPlayer1Score,
     player2Score: nextPlayer2Score,
-    status: matchResult.complete ? "complete" : "active",
+    status: matchResult.complete ? MATCH_STATUS.complete : MATCH_STATUS.active,
     winnerId: null,
     winnerRole: matchResult.winner,
   };
@@ -93,10 +99,13 @@ export function advanceTurnState(input: {
   const canDouble =
     input.doublingCube < 64 && (input.cubeOwner === null || input.cubeOwner === input.opponentId);
 
-  const nextTurnPhase: TurnPhase = canDouble ? "waiting_for_roll_or_double" : "moving";
-  const opponentRole: PlayerRole = input.opponentId === input.player1Id ? "player1" : "player2";
+  const nextTurnPhase: TurnPhase = canDouble
+    ? TURN_PHASE.waitingForRollOrDouble
+    : TURN_PHASE.moving;
+  const opponentRole: PlayerRole =
+    input.opponentId === input.player1Id ? PLAYER_ROLE.player1 : PLAYER_ROLE.player2;
 
-  if (nextTurnPhase === "waiting_for_roll_or_double") {
+  if (nextTurnPhase === TURN_PHASE.waitingForRollOrDouble) {
     return {
       currentTurn: input.opponentId,
       turnPhase: nextTurnPhase,
@@ -118,13 +127,14 @@ export function advanceTurnState(input: {
   ) {
     return {
       currentTurn: input.opponentId,
-      turnPhase: "moving",
+      turnPhase: TURN_PHASE.moving,
       dice: input.opponentRoll,
       diceUsed: opponentDiceUsed,
     };
   }
 
-  const currentRole: PlayerRole = input.currentPlayerId === input.player1Id ? "player1" : "player2";
+  const currentRole: PlayerRole =
+    input.currentPlayerId === input.player1Id ? PLAYER_ROLE.player1 : PLAYER_ROLE.player2;
   const currentPlayerDiceUsed = initializeDiceUsed(input.currentPlayerRoll);
   if (
     hasAnyLegalMove(
@@ -138,7 +148,7 @@ export function advanceTurnState(input: {
   ) {
     return {
       currentTurn: input.currentPlayerId,
-      turnPhase: "moving",
+      turnPhase: TURN_PHASE.moving,
       dice: input.currentPlayerRoll,
       diceUsed: currentPlayerDiceUsed,
     };
@@ -147,7 +157,7 @@ export function advanceTurnState(input: {
   const fallbackRoll = input.fallbackOpponentRoll ?? input.opponentRoll;
   return {
     currentTurn: input.opponentId,
-    turnPhase: "waiting_for_roll_or_double",
+    turnPhase: TURN_PHASE.waitingForRollOrDouble,
     dice: fallbackRoll,
     diceUsed: initializeDiceUsed(fallbackRoll),
   };

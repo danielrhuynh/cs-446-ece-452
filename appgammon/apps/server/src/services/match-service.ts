@@ -1,10 +1,5 @@
-/**
- * Game service acting as a facade for backgammon gameplay orchestration.
- * Controllers use one cohesive entry point while the service coordinates
- * persistence, gameplay rules, logging, and event publication.
- */
-
 import {
+  MATCH_EVENT_TYPE,
   INITIAL_BAR,
   INITIAL_BOARD,
   INITIAL_BORNE_OFF,
@@ -23,45 +18,32 @@ import {
   type PlayerRole,
   validateTurn,
 } from "@appgammon/common";
-import { gameEventBus, type GameEventBus } from "../event-bus/game-event-bus";
+import { matchEventBus } from "../event-bus/match-event-bus";
 import {
-  drizzleGameRepository,
-  type GameRepository,
+  matchRepo,
   type MatchRecord,
-  type SessionGameContext,
-} from "../repositories/game-repository";
+  type MatchGameContext,
+} from "../repositories/match-repository";
 import { logger } from "../utils/logger";
+import { getPlayerRole, getOpponentId, hasDisconnectedPlayer } from "../helpers/player";
 
 const lastEmoteTimestamp = new Map<string, number>();
 const EMOTE_COOLDOWN_MS = 3000;
 
-type ActionResult = { success: true } | { success: false; error: string; status: number };
-type StartMatchResult =
-  | { success: true; data: MatchState }
-  | { success: false; error: string; status: number };
-
-function getPlayerRole(playerId: string, player1Id: string, player2Id: string): PlayerRole | null {
-  if (playerId === player1Id) return "player1";
-  if (playerId === player2Id) return "player2";
-  return null;
-}
-
-function getOpponentId(role: PlayerRole, player1Id: string, player2Id: string): string {
-  return role === "player1" ? player2Id : player1Id;
-}
-
-function hasDisconnectedPlayer(input: { player1Connected: boolean; player2Connected: boolean }) {
-  return !input.player1Connected || !input.player2Connected;
-}
+type MatchRepo = typeof matchRepo;
+type MatchEventBusPort = Pick<typeof matchEventBus, "publish" | "subscribe">;
 
 export class MatchService {
-  constructor(
-    private readonly gameRepository: GameRepository = drizzleGameRepository,
-    private readonly eventBus: GameEventBus = gameEventBus,
-  ) {}
+  private readonly matchRepo: MatchRepo;
+  private readonly eventBus: MatchEventBusPort;
 
-  async startMatch(sessionId: string, targetScore: number): Promise<StartMatchResult> {
-    const existingMatch = await this.gameRepository.getActiveMatch(sessionId);
+  constructor(matchRepository: MatchRepo = matchRepo, eventBus: MatchEventBusPort = matchEventBus) {
+    this.matchRepo = matchRepository;
+    this.eventBus = eventBus;
+  }
+
+  async startMatch(sessionId: string, targetScore: number) {
+    const existingMatch = await this.matchRepo.getActiveMatch(sessionId);
     if (existingMatch) {
       return {
         success: false,
@@ -70,7 +52,7 @@ export class MatchService {
       };
     }
 
-    const players = await this.gameRepository.getSessionPlayers(sessionId);
+    const players = await this.matchRepo.getSessionPlayers(sessionId);
     if (!players) {
       return {
         success: false,
@@ -86,21 +68,21 @@ export class MatchService {
       };
     }
 
-    const matchRecord = await this.gameRepository.createMatch(sessionId, targetScore);
+    const matchRecord = await this.matchRepo.createMatch(sessionId, targetScore);
     const game = await this.createNewGame(matchRecord.id, players.player1Id, players.player2Id);
 
     logger.info({ matchId: matchRecord.id, sessionId, targetScore }, "[MATCH] Started match");
 
     const state = this.matchToState(matchRecord, game);
-    this.eventBus.publish(sessionId, { type: "match_state", data: state });
+    this.eventBus.publish(sessionId, { type: MATCH_EVENT_TYPE.state, data: state });
     return { success: true, data: state };
   }
 
   async getMatchState(sessionId: string): Promise<MatchState | null> {
-    const matchRecord = await this.gameRepository.getActiveMatch(sessionId);
+    const matchRecord = await this.matchRepo.getActiveMatch(sessionId);
     if (!matchRecord) return null;
 
-    const game = await this.gameRepository.getActiveGame(matchRecord.id);
+    const game = await this.matchRepo.getActiveGame(matchRecord.id);
     return this.matchToState(matchRecord, game);
   }
 
@@ -110,7 +92,7 @@ export class MatchService {
     version: number,
     playerMoves: Move[],
     sessionId: string,
-  ): Promise<ActionResult> {
+  ) {
     const context = await this.getGameContext(sessionId, gameId);
     if (!context) return { success: false, error: "Game not found for session", status: 404 };
 
@@ -148,8 +130,8 @@ export class MatchService {
       return { success: false, error: result.error ?? "Invalid moves", status: 422 };
     }
 
-    const moveCount = await this.gameRepository.countMoves(gameId);
-    await this.gameRepository.appendMoves(gameId, playerId, moveCount + 1, playerMoves);
+    const moveCount = await this.matchRepo.countMoves(gameId);
+    await this.matchRepo.appendMoves(gameId, playerId, moveCount + 1, playerMoves);
 
     const winnerRole = determineWinnerRole(result.newBorneOff);
     if (winnerRole) {
@@ -181,7 +163,7 @@ export class MatchService {
       fallbackOpponentRoll: rollDice(),
     });
 
-    await this.gameRepository.updateGame(gameId, {
+    await this.matchRepo.updateGame(gameId, {
       board: result.newBoard,
       bar: result.newBar,
       borneOff: result.newBorneOff,
@@ -196,7 +178,7 @@ export class MatchService {
     return { success: true };
   }
 
-  async proposeDouble(gameId: string, playerId: string, sessionId: string): Promise<ActionResult> {
+  async proposeDouble(gameId: string, playerId: string, sessionId: string) {
     const context = await this.getGameContext(sessionId, gameId);
     if (!context) return { success: false, error: "Game not found for session", status: 404 };
 
@@ -217,7 +199,7 @@ export class MatchService {
       return { success: false, error: "You don't own the cube", status: 403 };
     }
 
-    await this.gameRepository.updateGame(gameId, {
+    await this.matchRepo.updateGame(gameId, {
       turnPhase: "double_proposed",
       version: game.version + 1,
     });
@@ -227,7 +209,7 @@ export class MatchService {
 
     const opponentId = getOpponentId(role, player1Id, player2Id);
     this.eventBus.publish(sessionId, {
-      type: "double_proposed",
+      type: MATCH_EVENT_TYPE.doubleProposed,
       data: { cubeValue: game.doublingCube * 2, proposedBy: playerId },
       forPlayer: opponentId,
     });
@@ -241,7 +223,7 @@ export class MatchService {
     playerId: string,
     action: "accept" | "decline",
     sessionId: string,
-  ): Promise<ActionResult> {
+  ) {
     const context = await this.getGameContext(sessionId, gameId);
     if (!context) return { success: false, error: "Game not found for session", status: 404 };
 
@@ -258,7 +240,7 @@ export class MatchService {
 
     if (action === "accept") {
       const newCubeValue = game.doublingCube * 2;
-      await this.gameRepository.updateGame(gameId, {
+      await this.matchRepo.updateGame(gameId, {
         doublingCube: newCubeValue,
         cubeOwner: playerId,
         turnPhase: "moving",
@@ -266,7 +248,7 @@ export class MatchService {
       });
 
       this.eventBus.publish(sessionId, {
-        type: "double_accepted",
+        type: MATCH_EVENT_TYPE.doubleAccepted,
         data: { cubeValue: newCubeValue },
       });
       logger.info({ gameId, playerId, cubeValue: newCubeValue }, "[GAME] Double accepted");
@@ -276,14 +258,14 @@ export class MatchService {
       if (!proposerRole) return { success: false, error: "Forbidden", status: 403 };
 
       const points = game.doublingCube;
-      await this.gameRepository.updateGame(gameId, {
+      await this.matchRepo.updateGame(gameId, {
         status: "complete",
         winnerId: proposerId,
         turnPhase: "turn_complete",
         version: game.version + 1,
       });
 
-      const matchRecord = await this.gameRepository.getMatch(game.matchId);
+      const matchRecord = await this.matchRepo.getMatch(game.matchId);
       if (!matchRecord) return { success: false, error: "Match not found", status: 404 };
 
       const nextMatch = applyMatchPoints({
@@ -297,7 +279,7 @@ export class MatchService {
       if (nextMatch.status === "complete") {
         const matchWinnerId = nextMatch.winnerRole === "player1" ? player1Id : player2Id;
 
-        await this.gameRepository.updateMatch(matchRecord.id, {
+        await this.matchRepo.updateMatch(matchRecord.id, {
           player1Score: nextMatch.player1Score,
           player2Score: nextMatch.player2Score,
           status: "complete",
@@ -305,7 +287,7 @@ export class MatchService {
         });
 
         this.eventBus.publish(sessionId, {
-          type: "match_complete",
+          type: MATCH_EVENT_TYPE.matchComplete,
           data: {
             winnerId: matchWinnerId,
             player1Score: nextMatch.player1Score,
@@ -313,7 +295,7 @@ export class MatchService {
           },
         });
       } else {
-        await this.gameRepository.updateMatch(matchRecord.id, {
+        await this.matchRepo.updateMatch(matchRecord.id, {
           player1Score: nextMatch.player1Score,
           player2Score: nextMatch.player2Score,
         });
@@ -322,7 +304,7 @@ export class MatchService {
       }
 
       this.eventBus.publish(sessionId, {
-        type: "double_declined",
+        type: MATCH_EVENT_TYPE.doubleDeclined,
         data: { declinedBy: playerId, points },
       });
       logger.info({ gameId, playerId, points }, "[GAME] Double declined, game forfeited");
@@ -332,8 +314,8 @@ export class MatchService {
     return { success: true };
   }
 
-  async sendEmote(sessionId: string, playerId: string, emoteId: string): Promise<ActionResult> {
-    const players = await this.gameRepository.getSessionPlayers(sessionId);
+  async sendEmote(sessionId: string, playerId: string, emoteId: string) {
+    const players = await this.matchRepo.getSessionPlayers(sessionId);
     if (!players) {
       return { success: false, error: "Session not found or missing player 2", status: 404 };
     }
@@ -349,14 +331,14 @@ export class MatchService {
 
     lastEmoteTimestamp.set(playerId, now);
     this.eventBus.publish(sessionId, {
-      type: "emote",
+      type: MATCH_EVENT_TYPE.emote,
       data: { emoteId, fromPlayer: playerId },
     });
 
     return { success: true };
   }
 
-  async rollForTurn(gameId: string, playerId: string, sessionId: string): Promise<ActionResult> {
+  async rollForTurn(gameId: string, playerId: string, sessionId: string) {
     const context = await this.getGameContext(sessionId, gameId);
     if (!context) return { success: false, error: "Game not found for session", status: 404 };
 
@@ -394,7 +376,7 @@ export class MatchService {
         fallbackOpponentRoll: rollDice(),
       });
 
-      await this.gameRepository.updateGame(gameId, {
+      await this.matchRepo.updateGame(gameId, {
         currentTurn: nextTurn.currentTurn,
         turnPhase: nextTurn.turnPhase,
         dice: nextTurn.dice,
@@ -402,7 +384,7 @@ export class MatchService {
         version: game.version + 1,
       });
     } else {
-      await this.gameRepository.updateGame(gameId, {
+      await this.matchRepo.updateGame(gameId, {
         turnPhase: "moving",
         version: game.version + 1,
       });
@@ -415,8 +397,8 @@ export class MatchService {
   private async getGameContext(
     sessionId: string,
     gameId: string,
-  ): Promise<SessionGameContext | null> {
-    return this.gameRepository.getGameInSession(sessionId, gameId);
+  ): Promise<MatchGameContext | null> {
+    return this.matchRepo.getGameInSession(sessionId, gameId);
   }
 
   private matchToState(matchRecord: MatchRecord, currentGame: GameState | null): MatchState {
@@ -456,7 +438,7 @@ export class MatchService {
       initialBorneOff: INITIAL_BORNE_OFF,
     });
 
-    const game = await this.gameRepository.createGame(newGame);
+    const game = await this.matchRepo.createGame(newGame);
     logger.info(
       { gameId: game.id, firstPlayer: game.currentTurn, dice: openingDice },
       "[GAME] Created new game",
@@ -468,7 +450,7 @@ export class MatchService {
     const state = await this.getMatchState(sessionId);
     if (!state) return;
 
-    this.eventBus.publish(sessionId, { type: "match_state", data: state });
+    this.eventBus.publish(sessionId, { type: MATCH_EVENT_TYPE.state, data: state });
   }
 
   private async completeGameAfterMove(input: {
@@ -482,7 +464,7 @@ export class MatchService {
     bar: GameState["bar"];
     borneOff: GameState["borneOff"];
     diceUsed: NonNullable<GameState["diceUsed"]>;
-  }): Promise<ActionResult> {
+  }) {
     const { game, gameId, player1Id, player2Id, sessionId, winnerRole } = input;
     const winnerId = winnerRole === "player1" ? player1Id : player2Id;
     const points = calculateGamePoints(
@@ -493,7 +475,7 @@ export class MatchService {
       game.doublingCube,
     );
 
-    await this.gameRepository.updateGame(gameId, {
+    await this.matchRepo.updateGame(gameId, {
       board: input.board,
       bar: input.bar,
       borneOff: input.borneOff,
@@ -504,7 +486,7 @@ export class MatchService {
       version: game.version + 1,
     });
 
-    const matchRecord = await this.gameRepository.getMatch(game.matchId);
+    const matchRecord = await this.matchRepo.getMatch(game.matchId);
     if (!matchRecord) return { success: false, error: "Match not found", status: 404 };
 
     const nextMatch = applyMatchPoints({
@@ -518,7 +500,7 @@ export class MatchService {
     if (nextMatch.status === "complete") {
       const matchWinnerId = nextMatch.winnerRole === "player1" ? player1Id : player2Id;
 
-      await this.gameRepository.updateMatch(matchRecord.id, {
+      await this.matchRepo.updateMatch(matchRecord.id, {
         player1Score: nextMatch.player1Score,
         player2Score: nextMatch.player2Score,
         status: "complete",
@@ -526,7 +508,7 @@ export class MatchService {
       });
 
       this.eventBus.publish(sessionId, {
-        type: "match_complete",
+        type: MATCH_EVENT_TYPE.matchComplete,
         data: {
           winnerId: matchWinnerId,
           player1Score: nextMatch.player1Score,
@@ -534,14 +516,14 @@ export class MatchService {
         },
       });
     } else {
-      await this.gameRepository.updateMatch(matchRecord.id, {
+      await this.matchRepo.updateMatch(matchRecord.id, {
         player1Score: nextMatch.player1Score,
         player2Score: nextMatch.player2Score,
       });
 
       await this.createNewGame(matchRecord.id, player1Id, player2Id);
       this.eventBus.publish(sessionId, {
-        type: "game_over",
+        type: MATCH_EVENT_TYPE.gameOver,
         data: {
           winnerId,
           points,

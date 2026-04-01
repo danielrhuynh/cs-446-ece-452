@@ -1,37 +1,30 @@
 import { sign, verify } from "hono/jwt";
-import type { SessionRole } from "@appgammon/common";
+import { SESSION_ROLE, type SessionRole as SessionRoleType } from "@appgammon/common";
 import { z } from "zod";
 import { deviceIdValueSchema, sessionIdValueSchema } from "../schemas/session";
+import { env } from "./env";
+import { Context } from "hono";
+
+const sessionRoleValues = Object.values(SESSION_ROLE) as [SessionRoleType, ...SessionRoleType[]];
 
 const sessionTokenPayloadSchema = z.object({
   sub: z.uuid(),
   sessionId: sessionIdValueSchema,
-  role: z.enum(["host", "guest"]),
+  role: z.enum(sessionRoleValues),
   deviceId: deviceIdValueSchema,
   exp: z.number().int(),
   iat: z.number().int(),
 });
 
-export type SessionTokenPayload = z.infer<typeof sessionTokenPayloadSchema>;
-
-function getJwtSecret() {
-  const secret = process.env.APP_JWT_SECRET;
-
-  if (!secret) {
-    if (process.env.NODE_ENV === "production") {
-      throw new Error("APP_JWT_SECRET is required in production");
-    }
-
-    return "dev-only-session-secret-change-me";
-  }
-
-  return secret;
+async function verifySessionToken(token: string) {
+  const payload = await verify(token, env.APP_JWT_SECRET, "HS256");
+  return sessionTokenPayloadSchema.parse(payload);
 }
 
 export async function signSessionToken(input: {
   playerId: string;
   sessionId: string;
-  role: SessionRole;
+  role: SessionRoleType;
   deviceId: string;
 }) {
   const now = Math.floor(Date.now() / 1000);
@@ -46,20 +39,30 @@ export async function signSessionToken(input: {
       iat: now,
       exp,
     },
-    getJwtSecret(),
+    env.APP_JWT_SECRET,
   );
 }
 
-export async function verifySessionToken(token: string) {
-  const payload = await verify(token, getJwtSecret(), "HS256");
-  return sessionTokenPayloadSchema.parse(payload);
-}
+export async function checkAuth(c: Context, sessionId: string) {
+  const rawToken = c.req.header("Authorization");
+  if (!rawToken) {
+    return null;
+  }
 
-export function getBearerToken(authHeader: string | undefined) {
-  if (!authHeader) return null;
+  const [scheme, token] = rawToken.split(" ");
+  if (scheme !== "Bearer" || !token) {
+    return null;
+  }
 
-  const [scheme, token] = authHeader.split(" ");
-  if (scheme !== "Bearer" || !token) return null;
+  const deviceId = c.req.header("X-Device-Id");
 
-  return token;
+  try {
+    const claims = await verifySessionToken(token);
+    if (claims.sessionId !== sessionId || !claims.sub || claims.deviceId !== deviceId) {
+      return null;
+    }
+    return claims;
+  } catch {
+    return null;
+  }
 }

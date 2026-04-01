@@ -1,11 +1,13 @@
 import { useCallback, useState } from "react";
 import { type SSEConnectionError, type SSEEvent } from "@/lib/sse";
-import type {
-  MatchEventType,
+import {
+  MATCH_EVENT_TYPE,
   MatchState,
   RoomEventType,
-  SessionEventType,
+  SESSION_EVENT_TYPE,
   SessionWithPlayers,
+  type MatchEventType,
+  type SessionEventType,
 } from "@appgammon/common";
 import { useSSEStream } from "./use-sse-stream";
 
@@ -64,39 +66,39 @@ export function useRoomEvents(sessionId: string | undefined) {
       const data = JSON.parse(evt.data);
 
       switch (eventType) {
-        case "session_state":
-        case "session_ready":
-        case "session_cancelled":
+        case SESSION_EVENT_TYPE.state:
+        case SESSION_EVENT_TYPE.ready:
+        case SESSION_EVENT_TYPE.cancelled:
           setSession(data as SessionWithPlayers);
           setLastSessionEvent(eventType as SessionEventType);
           break;
-        case "match_state":
+        case MATCH_EVENT_TYPE.state:
           setMatchState(data as MatchState);
-          setLastMatchEvent(eventType);
+          setLastMatchEvent(eventType as MatchEventType);
           break;
-        case "double_proposed":
+        case MATCH_EVENT_TYPE.doubleProposed:
           setDoubleProposal(data as DoubleProposal);
-          setLastMatchEvent(eventType);
+          setLastMatchEvent(eventType as MatchEventType);
           break;
-        case "double_accepted":
-        case "double_declined":
+        case MATCH_EVENT_TYPE.doubleAccepted:
+        case MATCH_EVENT_TYPE.doubleDeclined:
           setDoubleProposal(null);
-          setLastMatchEvent(eventType);
+          setLastMatchEvent(eventType as MatchEventType);
           break;
-        case "game_over":
+        case MATCH_EVENT_TYPE.gameOver:
           setGameOverInfo(data as GameOverInfo);
-          setLastMatchEvent(eventType);
+          setLastMatchEvent(eventType as MatchEventType);
           break;
-        case "match_complete":
+        case MATCH_EVENT_TYPE.matchComplete:
           setMatchCompleteInfo(data as MatchCompleteInfo);
-          setLastMatchEvent(eventType);
+          setLastMatchEvent(eventType as MatchEventType);
           break;
-        case "emote":
+        case MATCH_EVENT_TYPE.emote:
           setLastEmote({
             ...(data as { emoteId: string; fromPlayer: string }),
             timestamp: Date.now(),
           });
-          setLastMatchEvent(eventType);
+          setLastMatchEvent(eventType as MatchEventType);
           break;
       }
     } catch {

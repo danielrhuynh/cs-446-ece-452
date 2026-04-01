@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { View, Text, StyleSheet, Alert, Platform, ActivityIndicator } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
+import { SESSION_EVENT_TYPE, SESSION_STATUS, type SessionStatus } from "@appgammon/common";
 import Animated, {
   Easing,
   FadeIn,
@@ -82,10 +83,10 @@ function EmptyAvatar({ borderColor }: { borderColor: string }) {
 }
 
 /* Session status labels. */
-const STATUS_LABELS: Record<string, string> = {
-  open: "Waiting for opponent",
-  ready: "Ready to start",
-  cancelled: "Session cancelled",
+const STATUS_LABELS: Record<SessionStatus, string> = {
+  [SESSION_STATUS.open]: "Waiting for opponent",
+  [SESSION_STATUS.ready]: "Ready to start",
+  [SESSION_STATUS.cancelled]: "Session cancelled",
 };
 
 /* Screen component. */
@@ -114,7 +115,10 @@ export default function LobbyScreen() {
 
   useEffect(() => {
     if (navigatedRef.current) return;
-    if (lastSessionEvent === "session_cancelled" || session?.status === "cancelled") {
+    if (
+      lastSessionEvent === SESSION_EVENT_TYPE.cancelled ||
+      session?.status === SESSION_STATUS.cancelled
+    ) {
       void clearActiveSession();
       void clearAuthToken();
       navigatedRef.current = true;

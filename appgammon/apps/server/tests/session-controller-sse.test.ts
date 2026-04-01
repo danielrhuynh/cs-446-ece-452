@@ -2,21 +2,21 @@ import { Hono } from "hono";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  authenticateRequest: vi.fn(),
+  checkAuth: vi.fn(),
   registerConnection: vi.fn(),
   releaseConnection: vi.fn(),
   getSession: vi.fn(),
   getMatchState: vi.fn(),
   sessionSubscribe: vi.fn(),
-  gameSubscribe: vi.fn(),
+  matchSubscribe: vi.fn(),
   streamWriteSSE: vi.fn(),
   streamSleep: vi.fn(),
   streamWrite: vi.fn(),
   streamOnAbort: vi.fn(),
 }));
 
-vi.mock("../src/middleware/auth", () => ({
-  authenticateRequest: mocks.authenticateRequest,
+vi.mock("../src/utils/auth", () => ({
+  checkAuth: mocks.checkAuth,
 }));
 
 vi.mock("../src/services/session-service", () => ({
@@ -27,7 +27,7 @@ vi.mock("../src/services/session-service", () => ({
   },
 }));
 
-vi.mock("../src/services/game-service", () => ({
+vi.mock("../src/services/match-service", () => ({
   matchService: {
     getMatchState: mocks.getMatchState,
   },
@@ -39,9 +39,9 @@ vi.mock("../src/event-bus/session-event-bus", () => ({
   },
 }));
 
-vi.mock("../src/event-bus/game-event-bus", () => ({
-  gameEventBus: {
-    subscribe: mocks.gameSubscribe,
+vi.mock("../src/event-bus/match-event-bus", () => ({
+  matchEventBus: {
+    subscribe: mocks.matchSubscribe,
   },
 }));
 
@@ -73,7 +73,7 @@ describe("session events SSE cleanup", () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    mocks.authenticateRequest.mockResolvedValue({ sub: "player-1" });
+    mocks.checkAuth.mockResolvedValue({ sub: "player-1" });
     mocks.registerConnection.mockResolvedValue(undefined);
     mocks.getSession.mockResolvedValue({
       id: "ABC123",
@@ -82,7 +82,7 @@ describe("session events SSE cleanup", () => {
     });
     mocks.getMatchState.mockResolvedValue(null);
     mocks.sessionSubscribe.mockReturnValue(vi.fn());
-    mocks.gameSubscribe.mockReturnValue(vi.fn());
+    mocks.matchSubscribe.mockReturnValue(vi.fn());
     mocks.streamWriteSSE.mockResolvedValue(undefined);
     mocks.streamSleep.mockResolvedValue(undefined);
     mocks.streamWrite.mockResolvedValue(undefined);
@@ -118,6 +118,6 @@ describe("session events SSE cleanup", () => {
     expect(mocks.releaseConnection).toHaveBeenCalledTimes(1);
     expect(mocks.releaseConnection).toHaveBeenCalledWith("ABC123", "player-1");
     expect(mocks.sessionSubscribe).not.toHaveBeenCalled();
-    expect(mocks.gameSubscribe).not.toHaveBeenCalled();
+    expect(mocks.matchSubscribe).not.toHaveBeenCalled();
   });
 });

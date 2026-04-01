@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { sValidator } from "@hono/standard-validator";
 import { describeRoute } from "hono-openapi";
+import { MATCH_EVENT_TYPE, SESSION_EVENT_TYPE, SESSION_ROLE } from "@appgammon/common";
 import {
   createSessionPayloadSchema,
   joinSessionPayloadSchema,
@@ -13,13 +14,12 @@ import {
   sessionResponse,
   sessionWithTokenResponse,
 } from "../schemas/openapi-responses";
-import { gameEventBus } from "../event-bus/game-event-bus";
+import { matchEventBus } from "../event-bus/match-event-bus";
 import { sessionEventBus } from "../event-bus/session-event-bus";
-import { matchService } from "../services/game-service";
+import { matchService } from "../services/match-service";
 import { sessionService } from "../services/session-service";
-import { signSessionToken } from "../utils/auth";
+import { signSessionToken, checkAuth } from "../utils/auth";
 import { runSSEKeepaliveLoop } from "../utils/sse";
-import { authenticateRequest } from "../middleware/auth";
 
 export const sessionRoutes = new Hono()
   .post(
@@ -58,14 +58,14 @@ export const sessionRoutes = new Hono()
       const authToken = await signSessionToken({
         playerId: player.id,
         sessionId: createdSession.id,
-        role: "host",
+        role: SESSION_ROLE.host,
         deviceId: device_id,
       });
 
       return c.json({
         ...session,
         auth_token: authToken,
-        role: "host",
+        role: SESSION_ROLE.host,
       });
     },
   )
@@ -143,7 +143,7 @@ export const sessionRoutes = new Hono()
     }),
     async (c) => {
       const sessionId = normalizeSessionId(c.req.param("id"));
-      const claims = await authenticateRequest(c, sessionId);
+      const claims = await checkAuth(c, sessionId);
 
       if (!claims) {
         return c.json({ error: "Unauthorized" }, 401);
@@ -188,7 +188,7 @@ export const sessionRoutes = new Hono()
     }),
     async (c) => {
       const sessionId = normalizeSessionId(c.req.param("id"));
-      const claims = await authenticateRequest(c, sessionId);
+      const claims = await checkAuth(c, sessionId);
 
       if (!claims) {
         return c.json({ error: "Unauthorized" }, 401);
@@ -206,7 +206,7 @@ export const sessionRoutes = new Hono()
   )
   .get("/:id/events", async (c) => {
     const sessionId = normalizeSessionId(c.req.param("id"));
-    const claims = await authenticateRequest(c, sessionId);
+    const claims = await checkAuth(c, sessionId);
 
     if (!claims) {
       return c.json({ error: "Unauthorized" }, 401);
@@ -254,13 +254,13 @@ export const sessionRoutes = new Hono()
 
         try {
           await stream.writeSSE({
-            event: "session_state",
+            event: SESSION_EVENT_TYPE.state,
             data: JSON.stringify(currentSession),
           });
 
           if (matchState) {
             await stream.writeSSE({
-              event: "match_state",
+              event: MATCH_EVENT_TYPE.state,
               data: JSON.stringify(matchState),
             });
           }
@@ -274,7 +274,7 @@ export const sessionRoutes = new Hono()
               .catch(() => {});
           });
 
-          unsubscribeMatch = gameEventBus.subscribe(sessionId, (event) => {
+          unsubscribeMatch = matchEventBus.subscribe(sessionId, (event) => {
             if (event.forPlayer && event.forPlayer !== claims.sub) return;
 
             stream

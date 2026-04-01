@@ -4,8 +4,8 @@
  * Red home: 0-5, Red outer: 6-11, White outer: 12-17, White home: 18-23
  */
 
-import type { PlayerColor, EmoteId } from "@appgammon/common";
-export type { PlayerColor, EmoteId } from "@appgammon/common";
+import type { PlayerColour, EmoteId } from "@appgammon/common";
+export type { PlayerColour, EmoteId } from "@appgammon/common";
 export { EMOTES } from "@appgammon/common";
 
 export interface PointState {
@@ -50,16 +50,16 @@ export const INITIAL_BOARD: BoardState = {
 
 export interface LastEmote {
   emoteId: EmoteId;
-  fromPlayer: PlayerColor;
+  fromPlayer: PlayerColour;
   timestamp: number;
 }
 
 export interface GameState {
   board: BoardState;
-  currentPlayer: PlayerColor;
+  currentPlayer: PlayerColour;
   dice: [number, number] | null;
   doublingCube: number;
-  doublingCubeOwner: PlayerColor | null;
+  doublingCubeOwner: PlayerColour | null;
   pendingDoubleProposal: boolean;
   matchScore: { white: number; red: number };
   matchLength: 3 | 5 | 7;

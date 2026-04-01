@@ -3,9 +3,27 @@
  */
 
 import { z } from "zod";
-import { session_status } from "@appgammon/common";
+import {
+  GAME_STATUS,
+  MATCH_STATUS,
+  SESSION_ROLE,
+  SESSION_STATUS,
+  TURN_PHASE,
+  type GameStatus as GameStatusType,
+  type MatchStatus as MatchStatusType,
+  type SessionRole as SessionRoleType,
+  type SessionStatus as SessionStatusType,
+  type TurnPhase as TurnPhaseType,
+} from "@appgammon/common";
 
-const sessionStatusValues = Object.values(session_status) as [string, ...string[]];
+const sessionStatusValues = Object.values(SESSION_STATUS) as [
+  SessionStatusType,
+  ...SessionStatusType[],
+];
+const sessionRoleValues = Object.values(SESSION_ROLE) as [SessionRoleType, ...SessionRoleType[]];
+const turnPhaseValues = Object.values(TURN_PHASE) as [TurnPhaseType, ...TurnPhaseType[]];
+const gameStatusValues = Object.values(GAME_STATUS) as [GameStatusType, ...GameStatusType[]];
+const matchStatusValues = Object.values(MATCH_STATUS) as [MatchStatusType, ...MatchStatusType[]];
 
 /** Convert a Zod schema to a JSON Schema object for OpenAPI docs. */
 export function jsonSchema(schema: z.ZodType): Record<string, unknown> {
@@ -40,7 +58,7 @@ export const sessionResponse = z.object({
 
 export const sessionWithTokenResponse = sessionResponse.extend({
   auth_token: z.string(),
-  role: z.enum(["host", "guest"]),
+  role: z.enum(sessionRoleValues),
 });
 
 export const barSchema = z.object({
@@ -60,13 +78,13 @@ export const gameStateSchema = z.object({
   bar: barSchema,
   borneOff: borneOffSchema,
   currentTurn: z.string().uuid(),
-  turnPhase: z.enum(["waiting_for_roll_or_double", "double_proposed", "moving", "turn_complete"]),
+  turnPhase: z.enum(turnPhaseValues),
   dice: z.tuple([z.number().int(), z.number().int()]).nullable(),
   diceUsed: z.array(z.boolean()).nullable(),
   doublingCube: z.number().int(),
   cubeOwner: z.string().uuid().nullable(),
   version: z.number().int(),
-  status: z.enum(["in_progress", "complete"]),
+  status: z.enum(gameStatusValues),
   winnerId: z.string().uuid().nullable(),
 });
 
@@ -76,7 +94,7 @@ export const matchStateSchema = z.object({
   targetScore: z.number().int(),
   player1Score: z.number().int(),
   player2Score: z.number().int(),
-  status: z.enum(["active", "complete"]),
+  status: z.enum(matchStatusValues),
   winnerId: z.string().uuid().nullable(),
   currentGame: gameStateSchema.nullable(),
 });
